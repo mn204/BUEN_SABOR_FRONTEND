@@ -73,7 +73,6 @@ npm run lint        # Linting
 ## 🔐 Autenticación
 
 - Implementada con Firebase Authentication.
-- Uso de token JWT recibido desde el backend.
 - Roles disponibles: Administrador, Cajero, Cocinero, Delivery, Cliente.
 
 ---
@@ -100,16 +99,6 @@ http://localhost:8080
 ```
 
 > ⚠️ Asegurate de tener el backend corriendo antes de iniciar el frontend.
-
----
-
-## ⚙️ Configuración del entorno
-
-Crear un archivo `.env` en la raíz del proyecto con el siguiente contenido:
-
-```env
-VITE_API_URL=http://localhost:8080
-```
 
 ---
 
