@@ -25,9 +25,9 @@ Sistema integral de gestión para un emprendimiento gastronómico con delivery, 
 
 ## 🧩 Estructura del proyecto
 
-El repositorio contiene dos carpetas principales:
+El Proyecto esta dvidido en dos carpetas principales:
 
-- `BUEN_SABOR_BACKEND/` → Contiene el backend implementado en Java Spring Boot.
+- `BUEN_SABOR_BACKEND/` → Contiene el backend implementado en Java Spring Boot.( encontrarlo en https://github.com/mn204/BUEN_SABOR_BACKEND )
 - `BUEN_SABOR_FRONTEND/` → Contiene el frontend desarrollado con React + Vite.
 
 ---
@@ -106,21 +106,49 @@ La aplicación quedará disponible en `http://localhost:5173`.
 
 ---
 
+---
+
 ## 📦 Descripción general de los módulos implementados
 
-- **Gestión de usuarios** (clientes y empleados)
-- **Dashboard administrativo**
-- **Panel de empleados** (cajero, cocinero, delivery)
-- **Catálogo y compra de productos**
-- **Carrito de compras y confirmación de pedidos**
-- **Control de stock de insumos**
-- **Estadísticas y reportes**
-- **Historial de pedidos**
-- **Integración con Mercado Pago**
-- **Autenticación segura con Firebase**
-- **Subida de imágenes a Cloudinary**
+El sistema cuenta con una arquitectura modular, donde cada sección está diseñada para cubrir una necesidad específica del negocio gastronómico. A continuación, se describen brevemente los principales módulos desarrollados:
 
-Cada módulo está adaptado a los distintos roles del sistema: Cliente, Administrador, Cajero, Cocinero y Delivery.
+- **Gestión de usuarios**  
+  Registro, autenticación y administración de usuarios, diferenciando entre clientes y empleados. Soporte para múltiples roles (Administrador, Cajero, Cocinero, Delivery).
+
+- **Dashboard administrativo**  
+  Panel exclusivo para administradores con estadísticas clave, reportes y acceso total a la gestión del sistema.
+
+- **Panel de empleados**  
+  Interfaz personalizada para cada tipo de empleado (Cajero, Cocinero, Delivery), con funcionalidades adaptadas según el rol.
+
+- **Catálogo y compra de productos**  
+  Vista orientada al cliente para explorar el menú, ver detalles de los productos y agregar al carrito.
+
+- **Carrito de compras y confirmación de pedidos**  
+  Proceso completo de compra, permitiendo revisar el pedido, seleccionar método de entrega y confirmar.
+
+- **Gestión de productos, insumos y categorías**  
+  ABM (Alta, Baja, Modificación) de artículos manufacturados, insumos y sus respectivas categorías.
+
+- **Control de stock de insumos**  
+  Actualización automática del stock según el consumo registrado en los pedidos.
+
+- **Estadísticas y reportes**  
+  Visualización de métricas relevantes como ventas por día, productos más vendidos y actividad por empleado.
+
+- **Historial de pedidos**  
+  Acceso al historial de pedidos por parte de clientes y empleados, con detalles y estados actualizados.
+
+- **Módulo de cocina**  
+  Gestión centralizada de pedidos en preparación, permitiendo marcar estados como “En preparación” o “Listo”.
+
+- **Módulo de delivery**  
+  Asignación y seguimiento de pedidos en reparto, con actualización de estado y confirmación de entrega.
+
+- **Gestión de promociones**  
+  Creación y administración de promociones o combos con descuentos aplicables al catálogo.
+
+Cada módulo se integra de forma segura y dinámica, garantizando una experiencia fluida para cada tipo de usuario del sistema.
 
 ---
 
