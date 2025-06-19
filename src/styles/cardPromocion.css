@@ -1,0 +1,222 @@
+.card-promocion {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: 1px solid #e1e5e9;
+    position: relative;
+}
+
+.card-promocion:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+    border-color: #ff6b35;
+}
+
+.card-promocion__image-container {
+    position: relative;
+    height: 300px;
+    overflow: hidden;
+    background: #f8f9fa;
+}
+
+.card-promocion__image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+}
+
+.card-promocion:hover .card-promocion__image {
+    transform: scale(1.05);
+}
+
+.card-promocion__placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #6c757d;
+    background: #f8f9fa;
+}
+
+.card-promocion__placeholder svg {
+    margin-bottom: 8px;
+    opacity: 0.5;
+}
+
+.card-promocion__placeholder span {
+    font-size: 14px;
+    opacity: 0.7;
+}
+
+.card-promocion__discount-badge {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: #e74c3c;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: bold;
+    z-index: 2;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.card-promocion__content {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex-grow: 1;
+}
+
+.card-promocion__title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #2c3e50;
+    margin: 0 0 8px 0;
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.card-promocion__description {
+    font-size: 14px;
+    color: #6c757d;
+    margin: 0 0 12px 0;
+    line-height: 1.4;
+}
+
+.card-promocion__price-section {
+    margin: 8px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.card-promocion__original-price {
+    font-size: 14px;
+    color: #6c757d;
+    text-decoration: line-through;
+    opacity: 0.8;
+}
+
+.card-promocion__promo-price {
+    font-size: 20px;
+    font-weight: bold;
+    color: #27ae60;
+}
+
+.card-promocion__validity {
+    margin: 8px 0;
+    color: #6c757d;
+    font-size: 12px;
+}
+
+.card-promocion__button {
+    background: linear-gradient(135deg, #ff6b35, #f7931e);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: auto;
+    position: relative;
+    overflow: hidden;
+}
+
+.card-promocion__button:hover:not(:disabled) {
+    background: linear-gradient(135deg, #e55a2b, #e8851a);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(255, 107, 53, 0.3);
+}
+
+.card-promocion__button:active {
+    transform: translateY(0);
+}
+
+.card-promocion__button:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.card-promocion__button.loading {
+    pointer-events: none;
+}
+
+.spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid transparent;
+    border-top: 2px solid white;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .card-promocion {
+        width: 100%;
+        max-width: 320px;
+        display: block;
+    }
+    
+    .card-promocion__image-container {
+        height: 160px;
+    }
+    
+    .card-promocion__title {
+        font-size: 15px;
+    }
+    
+    .card-promocion__promo-price {
+        font-size: 18px;
+    }
+}
+
+/* Estados adicionales */
+.card-promocion--featured {
+    border: 2px solid #ff6b35;
+    box-shadow: 0 4px 12px rgba(255, 107, 53, 0.2);
+}
+
+.card-promocion--sold-out {
+    opacity: 0.6;
+}
+
+.card-promocion--sold-out::after {
+    content: 'AGOTADO';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-45deg);
+    background: rgba(231, 76, 60, 0.9);
+    color: white;
+    padding: 8px 40px;
+    font-weight: bold;
+    font-size: 14px;
+    z-index: 10;
+}

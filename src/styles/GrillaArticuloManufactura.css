@@ -1,0 +1,12 @@
+.imgModalArtManu{
+    width: 100px;
+    height: auto;
+}
+
+.botonVer{
+    height: 30px !important;
+    width: auto !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+}

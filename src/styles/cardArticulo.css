@@ -1,0 +1,319 @@
+.card-articulo {
+    display: flex;
+    flex-direction: column;
+    width: 280px;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: 1px solid #e1e5e9;
+    position: relative;
+}
+
+.card-categoria{
+    display: flex;
+    flex-direction: column;
+    width: 200px;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: 1px solid #e1e5e9;
+    position: relative;
+}
+
+.card-articulo:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+    border-color: #ff6b35;
+}
+
+.card-articulo__image-container {
+    position: relative;
+    height: 180px;
+    overflow: hidden;
+    background: #f8f9fa;
+}
+
+.card-articulo__image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+}
+
+.card-articulo:hover .card-articulo__image {
+    transform: scale(1.05);
+}
+
+.card-articulo__placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #6c757d;
+    background: #f8f9fa;
+}
+
+.card-articulo__placeholder svg {
+    margin-bottom: 8px;
+    opacity: 0.5;
+}
+
+.card-articulo__placeholder span {
+    font-size: 14px;
+    opacity: 0.7;
+}
+
+.card-articulo__discount-badge {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: #e74c3c;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: bold;
+    z-index: 2;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.card-articulo__content {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+}
+
+.card-articulo__title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #2c3e50;
+    margin: 0 0 8px 0;
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.card-articulo__description {
+    font-size: 14px;
+    color: #6c757d;
+    margin: 0 0 12px 0;
+    line-height: 1.4;
+}
+
+.card-articulo__price-section {
+    margin: 8px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.card-articulo__original-price {
+    font-size: 14px;
+    color: #6c757d;
+    text-decoration: line-through;
+    opacity: 0.8;
+}
+
+.card-articulo__promo-price {
+    font-size: 20px;
+    font-weight: bold;
+    color: #27ae60;
+}
+
+.card-articulo__validity {
+    margin: 8px 0;
+    color: #6c757d;
+    font-size: 12px;
+}
+
+.card-articulo__button {
+    background: linear-gradient(135deg, #ff6b35, #f7931e);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: auto;
+    position: relative;
+    overflow: hidden;
+}
+
+.card-articulo__button:hover:not(:disabled) {
+    background: linear-gradient(135deg, #e55a2b, #e8851a);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(255, 107, 53, 0.3);
+}
+
+.card-articulo__button:active {
+    transform: translateY(0);
+}
+
+.card-articulo__button:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.card-articulo__button.loading {
+    pointer-events: none;
+}
+
+.spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid transparent;
+    border-top: 2px solid white;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .card-articulo {
+        width: 100%;
+        max-width: 320px;
+    }
+    
+    .card-articulo__image-container {
+        height: 160px;
+    }
+    
+    .card-articulo__title {
+        font-size: 15px;
+    }
+    
+    .card-articulo__promo-price {
+        font-size: 18px;
+    }
+}
+
+/* Estados adicionales */
+.card-articulo--featured {
+    border: 2px solid #ff6b35;
+    box-shadow: 0 4px 12px rgba(255, 107, 53, 0.2);
+}
+
+.card-articulo--sold-out {
+    opacity: 0.6;
+}
+
+.card-articulo--sold-out::after {
+    content: 'AGOTADO';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-45deg);
+    background: rgba(231, 76, 60, 0.9);
+    color: white;
+    padding: 8px 40px;
+    font-weight: bold;
+    font-size: 14px;
+    z-index: 10;
+}
+
+/* Estilos adicionales para el estado sin stock */
+
+.card-articulo.out-of-stock {
+  opacity: 0.7;
+  pointer-events: auto; /* Permitir click para ver detalles */
+}
+
+.card-articulo.out-of-stock .card-articulo__image {
+  filter: grayscale(50%);
+}
+
+.card-articulo__overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+
+.card-articulo__out-of-stock-text {
+  color: white;
+  font-weight: bold;
+  font-size: 16px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  background: rgba(220, 53, 69, 0.9);
+  padding: 8px 16px;
+  border-radius: 4px;
+}
+
+.card-articulo__stock-info {
+  margin: 8px 0;
+  font-size: 14px;
+}
+
+.card-articulo__stock-loading {
+  color: #6c757d;
+  font-style: italic;
+}
+
+.card-articulo__stock.in-stock {
+  color: #28a745;
+  font-weight: 500;
+}
+
+.card-articulo__stock.no-stock {
+  color: #dc3545;
+  font-weight: 500;
+}
+
+.card-articulo__button.disabled {
+  background-color: #6c757d;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.card-articulo__button.disabled:hover {
+  background-color: #6c757d;
+  transform: none;
+}
+
+/* Spinner para loading states */
+.spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  border-top-color: transparent;
+  animation: spin 1s ease-in-out infinite;
+  margin-right: 8px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

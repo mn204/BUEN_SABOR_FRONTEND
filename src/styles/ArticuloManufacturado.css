@@ -1,0 +1,35 @@
+.formArticuloManufacturado input, textarea, select, .modalAregarInsumos input {
+  width: 100%;
+  background-color: #fff;
+  border: 1px solid #ccc;
+  border-radius: 10px;
+  height: fit-content;
+  padding: 10px;
+  margin: 5px 0;
+  box-sizing: border-box;
+  color: #000;
+}
+
+.formArticuloManufacturado{
+  margin: 70px;
+}
+
+.formArticuloManufacturado form{
+  width: 100%;
+  max-width: 600px;
+  margin: auto;
+  padding: 20px;
+  background-color: #f9f9f9;
+  border-radius: 10px;
+}
+
+.agregarInsumo{
+  width: 100%;
+  max-width: fit-content;
+}
+
+.formArticuloManufacturado form div{
+  gap: 10px;
+  display: flex;
+  justify-content: center;
+}
