@@ -86,7 +86,6 @@ npm run lint        # Linting
 - Seguimiento de estado del pedido
 - Administración de productos, insumos, usuarios y promociones
 - Responsive design para experiencia móvil
-- Notificaciones en tiempo real (en desarrollo con WebSockets)
 
 ---
 
