@@ -80,7 +80,7 @@ class SucursalInsumoService {
             throw error;
         }
     }
-    
+
     async getBySucursal(idSucursal: number): Promise<SucursalInsumo[]> {
         try {
             const res = await fetch(`${API_URL}/sucursal/${idSucursal}`);
@@ -88,6 +88,34 @@ class SucursalInsumoService {
             return await res.json();
         } catch (error) {
             console.error("Error en getStockBajo:", error);
+            throw error;
+        }
+    }
+
+    async getFiltrados(params: {
+        idSucursal?: number | null,
+        nombreInsumo?: string,
+        stockActualMenorAStockMinimo?: boolean,
+        stockActualMayorAStockMaximo?: boolean,
+        page?: number,
+        size?: number,
+        sort?: string // ejemplo: "articuloInsumo.denominacion,asc"
+    }): Promise<any> {
+        try {
+            const query = new URLSearchParams();
+            if (params.idSucursal != null) query.append("idSucursal", params.idSucursal.toString());
+            if (params.nombreInsumo) query.append("nombreInsumo", params.nombreInsumo);
+            if (params.stockActualMenorAStockMinimo != null) query.append("stockActualMenorAStockMinimo", String(params.stockActualMenorAStockMinimo));
+            if (params.stockActualMayorAStockMaximo != null) query.append("stockActualMayorAStockMaximo", String(params.stockActualMayorAStockMaximo));
+            if (params.page != null) query.append("page", params.page.toString());
+            if (params.size != null) query.append("size", params.size.toString());
+            if (params.sort) query.append("sort", params.sort);
+
+            const res = await fetch(`${API_URL}/filtrados?${query.toString()}`);
+            if (!res.ok) throw new Error("Error al obtener stock filtrado");
+            return await res.json();
+        } catch (error) {
+            console.error("Error en getFiltrados:", error);
             throw error;
         }
     }

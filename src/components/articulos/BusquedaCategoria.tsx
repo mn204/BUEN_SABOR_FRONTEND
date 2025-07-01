@@ -142,7 +142,24 @@ const BusquedaCategoria: React.FC = () => {
             )
         );
     };
-
+    if (!categoria || categoria.eliminado || categoria.categoriaPadre?.eliminado || articulos.length === 0 || articulos.every(articulo => articulo.precioVenta === null)) {
+        return (
+            <div className="container mt-5">
+                <div className="alert alert-warning text-center" role="alert">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mb-3">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="8" x2="12" y2="12"></line>
+                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
+                    <h4>Categoría no encontrada</h4>
+                    <p>La categoría que buscas no existe o ha sido eliminada.</p>
+                    <button className="btn btn-primary" onClick={() => navigate(-1)}>
+                        Volver atrás
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="busqueda-categoria m-5">
@@ -160,14 +177,8 @@ const BusquedaCategoria: React.FC = () => {
 
                 <div className="busqueda-categoria__info">
                     <h1 className="busqueda-categoria__title">
-                        {categoria?.denominacion}
+                        {categoria.denominacion}
                     </h1>
-
-                    {categoria?.categoriaPadre && (
-                        <p className="busqueda-categoria__parent">
-                            Subcategoría de: <span>{categoria.categoriaPadre.denominacion}</span>
-                        </p>
-                    )}
 
                     <p className="busqueda-categoria__count">
                         {articulos.length} {articulos.length === 1 ? 'producto encontrado' : 'productos encontrados'}

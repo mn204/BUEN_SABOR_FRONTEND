@@ -23,17 +23,8 @@ function ModalAgregarArticulo({
 }: Props) {
   // Filtros
   const [filtroDenominacion, setFiltroDenominacion] = useState("");
-  const [filtroUnidad, setFiltroUnidad] = useState("");
   const [filtroCategoria, setFiltroCategoria] = useState("");
 
-  // Opciones únicas para selects
-  const unidades = useMemo(
-    () =>
-      Array.from(
-        new Set(articulos.map(i => i.unidadMedida?.denominacion).filter(Boolean))
-      ),
-    [articulos]
-  );
   const categorias = useMemo(
     () =>
       Array.from(
@@ -48,16 +39,15 @@ function ModalAgregarArticulo({
       articulos.filter(insumo =>
         (!filtroDenominacion ||
           insumo.denominacion.toLowerCase().includes(filtroDenominacion.toLowerCase())) &&
-        (!filtroUnidad || insumo.unidadMedida?.denominacion === filtroUnidad) &&
         (!filtroCategoria || insumo.categoria?.denominacion === filtroCategoria)
       ),
-    [articulos, filtroDenominacion, filtroUnidad, filtroCategoria]
+    [articulos, filtroDenominacion, filtroCategoria]
   );
 
   return (
     <Modal show={show} onHide={onHide} size="lg" centered scrollable>
       <Modal.Header closeButton>
-        <Modal.Title>Seleccionar Insumo</Modal.Title>
+        <Modal.Title>Seleccionar Articulo</Modal.Title>
       </Modal.Header>
       <Modal.Body>
         <div
@@ -76,18 +66,6 @@ function ModalAgregarArticulo({
                 onChange={e => setFiltroDenominacion(e.target.value)}
               />
             </InputGroup>
-
-            <Form.Select
-              value={filtroUnidad}
-              onChange={e => setFiltroUnidad(e.target.value)}
-              aria-label="Filtrar por unidad"
-              style={{ maxWidth: 160 }}
-            >
-              <option value="">Todas las unidades</option>
-              {unidades.map(um => (
-                <option key={um} value={um}>{um}</option>
-              ))}
-            </Form.Select>
 
             <Form.Select
               value={filtroCategoria}

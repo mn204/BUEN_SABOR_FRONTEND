@@ -4,9 +4,9 @@ import Categoria from "./Categoria";
 import type TipoArticulo from "./enums/TipoArticulo";
 
 export default class Articulo {
-    id!: number;
+    id?: number;
     denominacion: string = "";
-    precioVenta: number = 0;
+    precioVenta?: number | null;
     imagenes: ImagenArticulo[] = [];
     unidadMedida!: UnidadMedida;
     categoria!: Categoria;

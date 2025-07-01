@@ -10,6 +10,7 @@ import { useSucursal } from "../../../context/SucursalContextEmpleado.tsx";
 import { obtenerSucursales } from "../../../services/SucursalService.ts";
 import type Sucursal from "../../../models/Sucursal.ts";
 import CocinaModal  from "../modales/CocinaModal.tsx";
+import ModalMensaje from "../modales/ModalMensaje";
 
 const GrillaCocina: React.FC = () => {
     const { sucursalActual, esModoTodasSucursales, sucursalIdSeleccionada } = useSucursal();
@@ -63,6 +64,16 @@ const GrillaCocina: React.FC = () => {
         return pedido.detalles.reduce((total, detalle) => total + detalle.cantidad, 0);
     };
 
+    const [modalMensaje, setModalMensaje] = useState({
+        show: false,
+        mensaje: "",
+        titulo: "Mensaje",
+        variante: "danger" as "primary" | "success" | "danger" | "warning" | "info" | "secondary"
+    });
+    const mostrarModalMensaje = (mensaje: string, variante: typeof modalMensaje.variante = "danger", titulo = "Error") => {
+        setModalMensaje({ show: true, mensaje, variante, titulo });
+    };
+
     const fetchPedidos = async () => {
         try {
             setLoading(true);
@@ -86,35 +97,28 @@ const GrillaCocina: React.FC = () => {
                 return;
             }
 
+            // ✅ CORRECCIÓN: Cambiar 'estado' por 'estados' y usar array de strings
             const filtrosAPI = {
-                estado: Estado.PREPARACION
+                estados: [Estado.PREPARACION] as string[] // Asegurar que sea array de strings
             };
+
+            // ✅ CORRECCIÓN: Agregar parámetro de ordenamiento
+            const sortParam = filtros.ordenHora === "ASC" ? "fechaPedido,ASC" : "fechaPedido,DESC";
 
             const result = await pedidoService.getPedidosFiltrados(
                 sucursalId,
                 filtrosAPI,
                 page,
-                size
+                size,
+                sortParam // ✅ Pasar el parámetro de ordenamiento al servicio
             );
 
-            // Ordenar por hora según el filtro
-            let pedidosOrdenados = [...result.content];
-            pedidosOrdenados.sort((a, b) => {
-                const horaA = new Date(a.fechaPedido).getTime();
-                const horaB = new Date(b.fechaPedido).getTime();
-
-                if (filtros.ordenHora === "ASC") {
-                    return horaA - horaB;
-                } else {
-                    return horaB - horaA;
-                }
-            });
-
-            setPedidos(pedidosOrdenados);
+            // ✅ Ya no necesitas ordenar manualmente aquí, el backend lo hace
+            setPedidos(result.content);
             setTotalPages(result.totalPages);
         } catch (error) {
             console.error("Error al obtener pedidos en preparación:", error);
-            alert("Error al obtener pedidos en preparación");
+            mostrarModalMensaje("Error al obtener pedidos en preparación", "danger", "Error");
         } finally {
             setLoading(false);
         }
@@ -151,7 +155,7 @@ const GrillaCocina: React.FC = () => {
             setPedidoSeleccionado(pedido);
             setShowModal(true);
         } catch (error) {
-            alert("No se pudo obtener el detalle del pedido");
+            mostrarModalMensaje("No se pudo obtener el detalle del pedido", "danger", "Error");
         }
     };
 
@@ -172,24 +176,21 @@ const GrillaCocina: React.FC = () => {
 
     const handleConfirmMarcarListo = async () => {
         if (!pedidoParaMarcarListo) return;
-
         try {
             setLoadingListo(true);
             const pedidoActual = pedidos.find(p => p.id === pedidoParaMarcarListo);
             if (!pedidoActual) return;
-
             const pedidoActualizado = {
                 ...pedidoActual,
                 estado: Estado.LISTO,
                 empleado: empleado
             };
-
             await pedidoService.cambiarEstadoPedido(pedidoActualizado);
             setShowConfirmListo(false);
             setPedidoParaMarcarListo(null);
-            fetchPedidos(); // Refrescar la lista
+            fetchPedidos();
         } catch (error) {
-            alert("Error al cambiar el estado del pedido");
+            mostrarModalMensaje("Error al cambiar el estado del pedido", "danger", "Error");
             console.error(error);
         } finally {
             setLoadingListo(false);
@@ -200,19 +201,17 @@ const GrillaCocina: React.FC = () => {
             setLoadingListo(true);
             const pedidoActual = pedidos.find(p => p.id === pedidoId);
             if (!pedidoActual) return;
-
             const pedidoActualizado = {
                 ...pedidoActual,
                 estado: Estado.LISTO,
                 empleado: empleado
             };
-
             await pedidoService.cambiarEstadoPedido(pedidoActualizado);
-            setShowModal(false); // ✅ Cerramos el modal
+            setShowModal(false);
             setPedidoSeleccionado(null);
-            fetchPedidos(); // ✅ Refrescamos la lista
+            fetchPedidos();
         } catch (error) {
-            alert("Error al cambiar el estado del pedido");
+            mostrarModalMensaje("Error al cambiar el estado del pedido", "danger", "Error");
             console.error(error);
         } finally {
             setLoadingListo(false);
@@ -454,6 +453,14 @@ const GrillaCocina: React.FC = () => {
                     </Button>
                 </Modal.Footer>
             </Modal>
+
+            <ModalMensaje
+                show={modalMensaje.show}
+                onHide={() => setModalMensaje({ ...modalMensaje, show: false })}
+                mensaje={modalMensaje.mensaje}
+                titulo={modalMensaje.titulo}
+                variante={modalMensaje.variante}
+            />
         </div>
     );
 };

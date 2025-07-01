@@ -130,7 +130,7 @@ export const eliminarDomiciliosCliente = async (idCliente: number, idDomicilio: 
 
 // DELETE - Baja lógica del cliente
 export const eliminarCliente = async (id: number): Promise<void> => {
-    const response = await fetch(`${API_URL}/${id}`, {
+    const response = await fetch(`${API_URL}/eliminar/${id}`, {
         method: "DELETE",
     });
     if (!response.ok) {
@@ -140,7 +140,7 @@ export const eliminarCliente = async (id: number): Promise<void> => {
 
 // PUT - Dar de alta a un cliente eliminado
 export const darDeAltaCliente = async (id: number): Promise<void> => {
-    const response = await fetch(`${API_URL}/darAlta/${id}`, {
+    const response = await fetch(`${API_URL}/darAltaCliente/${id}`, {
         method: "PUT",
     });
     if (!response.ok) {

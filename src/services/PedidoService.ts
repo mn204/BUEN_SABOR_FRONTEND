@@ -36,14 +36,18 @@ class PedidoService {
                 body: JSON.stringify(pedido)
             });
 
-            const stockDisponible: boolean = await response.json();
-            console.log(stockDisponible)
+            if (!response.ok) {
+                const errorBody = await response.json();
+                throw new Error(JSON.stringify(errorBody) || 'Error verificando stock');
+            }
+
+            const stockDisponible = await response.json();
             return stockDisponible;
         } catch (error) {
-            alert(error)
-        }z
-
+            throw error;
+        }
     }
+
 
     async create(pedido: Pedido): Promise<Pedido | null> {
         try {
@@ -95,7 +99,7 @@ class PedidoService {
             // Si el resultado es un boolean true, significa que se procesó correctamente
             if (resultado === true) {
                 try {
-                    const ultimoPedidoRes = await fetch(`${API_URL}/ultimo/cliente/${pedido.cliente.id}`, {
+                    const ultimoPedidoRes = await fetch(`${API_URL}/ultimo/cliente/${pedido.cliente!.id}`, {
                         method: "GET",
                         headers: { "Content-Type": "application/json" },
                     });
@@ -118,9 +122,7 @@ class PedidoService {
                     }
 
                     const ultimoPedido: Pedido = await ultimoPedidoRes.json();
-                    console.log(ultimoPedido)
                     if (ultimoPedido && ultimoPedido.id) {
-                        alert(`Pedido guardado exitosamente con ID: ${ultimoPedido.id}`);
                         return ultimoPedido;
                     } else {
                         alert("Pedido procesado pero no se pudo obtener la información completa.");
@@ -174,19 +176,25 @@ class PedidoService {
             throw error;
         }
     }
-    async getPedidosCliente(clienteId: number, filtros: any, page: number, size: number): Promise<{ content: Pedido[]; totalPages: number }> {
+    async getPedidosCliente(
+        clienteId: number,
+        filtros: any,
+        page: number,
+        size: number,
+        orden: "DESC" | "ASC" = "DESC"
+    ): Promise<{ content: Pedido[]; totalPages: number }> {
         const params = new URLSearchParams();
 
         if (filtros.sucursal) params.append("sucursal", filtros.sucursal);
         if (filtros.estado) params.append("estado", filtros.estado);
-        if (filtros.desde) params.append("desde", filtros.desde);
-        if (filtros.hasta) params.append("hasta", filtros.hasta);
+        if (filtros.fechaDesde) params.append("fechaDesde", filtros.fechaDesde);
+        if (filtros.fechaHasta) params.append("fechaHasta", filtros.fechaHasta);
         if (filtros.articulo) params.append("articulo", filtros.articulo);
 
         params.append("page", page.toString());
         params.append("size", size.toString());
+        params.append("sort", `fechaPedido,${orden}`);
 
-        // FIX: Usar la misma base URL que los otros métodos
         const response = await fetch(`${API_URL}/cliente/${clienteId}?${params.toString()}`);
         if (!response.ok) {
             throw new Error("Error al obtener pedidos del cliente");
@@ -210,33 +218,34 @@ class PedidoService {
     async getPedidosFiltrados(
         idSucursal: number | null,
         filtros: {
-            estado?: string;
+            estados?: string[];
             clienteNombre?: string;
             idPedido?: number;
             idEmpleado?: number;
             pagado?: boolean;
             fechaDesde?: string;
             fechaHasta?: string;
+            tipoEnvio?: "DELIVERY" | "TAKEAWAY";
         },
         page: number = 0,
-        size: number = 10
+        size: number = 10,
+        sort?: string // <--- Nuevo parámetro
     ): Promise<{ content: Pedido[]; totalPages: number }> {
         const params = new URLSearchParams();
 
-        if (idSucursal !== null) {
-            params.append("idSucursal", idSucursal.toString());
-        }
-        if (filtros.estado) params.append("estado", filtros.estado);
+        if (idSucursal !== null) params.append("idSucursal", idSucursal.toString());
+        if (filtros.estados && filtros.estados.length > 0) filtros.estados.forEach(estado => params.append("estados", estado));
         if (filtros.clienteNombre) params.append("clienteNombre", filtros.clienteNombre);
         if (filtros.idPedido !== undefined) params.append("idPedido", filtros.idPedido.toString());
         if (filtros.idEmpleado !== undefined) params.append("idEmpleado", filtros.idEmpleado.toString());
         if (filtros.pagado !== undefined) params.append("pagado", filtros.pagado.toString());
         if (filtros.fechaDesde) params.append("fechaDesde", filtros.fechaDesde);
         if (filtros.fechaHasta) params.append("fechaHasta", filtros.fechaHasta);
+        if (filtros.tipoEnvio) params.append("tipoEnvio", filtros.tipoEnvio);
 
         params.append("page", page.toString());
         params.append("size", size.toString());
-        params.append("sort", "fechaPedido,DESC"); // <-- Agrega el ordenamiento aquí
+        if (sort) params.append("sort", sort); // <--- Agrega el sort
 
         const response = await fetch(`${API_URL}/filtrados?${params.toString()}`);
         if (!response.ok) {
@@ -339,11 +348,12 @@ class PedidoService {
     async exportarPedidosFiltrados(
         idSucursal: number | null,
         filtros: {
-            estado?: string;
+            estados?: string[];
             clienteNombre?: string;
             idPedido?: number;
             idEmpleado?: number;
             pagado?: boolean;
+            tipoEnvio?: "DELIVERY" | "TAKEAWAY";
             fechaDesde?: string;
             fechaHasta?: string;
         },
@@ -351,11 +361,12 @@ class PedidoService {
         const params = new URLSearchParams();
 
         if (idSucursal !== null) params.append("idSucursal", idSucursal.toString());
-        if (filtros.estado) params.append("estado", filtros.estado);
+        if (filtros.estados && filtros.estados.length > 0) filtros.estados.forEach(estado => params.append("estados", estado));
         if (filtros.clienteNombre) params.append("clienteNombre", filtros.clienteNombre);
         if (filtros.idPedido !== undefined) params.append("idPedido", filtros.idPedido.toString());
         if (filtros.idEmpleado !== undefined) params.append("idEmpleado", filtros.idEmpleado.toString());
         if (filtros.pagado !== undefined) params.append("pagado", filtros.pagado.toString());
+        if (filtros.tipoEnvio) params.append("tipoEnvio", filtros.tipoEnvio);
         if (filtros.fechaDesde) params.append("fechaDesde", filtros.fechaDesde);
         if (filtros.fechaHasta) params.append("fechaHasta", filtros.fechaHasta);
 
@@ -366,6 +377,45 @@ class PedidoService {
             throw new Error("Error al exportar pedidos filtrados");
         }
         return await response.blob();
+    }
+
+    async verificarStockPorSucursal(pedido: Pedido): Promise<boolean> {
+        try {
+            const response = await fetch(`${API_URL}/verificar-stock`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(pedido)
+            });
+
+            if (!response.ok) {
+                console.error(`Error al verificar stock para sucursal ${pedido.sucursal?.id}:`, response.statusText);
+                return false;
+            }
+
+            const resultado = await response.json();
+            return resultado;
+        } catch (error) {
+            console.error(`Error al verificar stock para sucursal ${pedido.sucursal?.id}:`, error);
+            return false;
+        }
+    }
+
+    async verificarStockArticulo(articuloId: number, cantidad: number, sucursalId: number): Promise<boolean> {
+        try {
+            const res = await fetch(`${API_URL}/verificar-stock-articulo/${articuloId}/${cantidad}/${sucursalId}`, {
+                method: "GET",
+                headers: {
+                    "Content-Type": "application/json",
+                }
+            });
+            if (!res.ok) throw new Error("Error al verificar stock de artículo");
+            return await res.json(); // debería devolver true o false
+        } catch (error) {
+            console.error(error);
+            throw error;
+        }
     }
 }
 

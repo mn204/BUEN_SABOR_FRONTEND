@@ -1,4 +1,5 @@
 import Promocion from "../models/Promocion";
+import type Sucursal from "../models/Sucursal";
 
 const API_URL = "http://localhost:8080/api/promocion";
 
@@ -57,8 +58,22 @@ class PromocionService {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(promocion)
             });
-            console.log(JSON.stringify(promocion));
-            if (!res.ok) throw new Error("Error al crear artículo manufacturado");
+            if (!res.ok) throw new Error("Error al crear la promocion");
+            return await res.json();
+        } catch (error) {
+            console.error(error);
+            throw error;
+        }
+    }
+
+    async consultarStockPromocion(promocion: Promocion, cantidad: number, sucursal: Sucursal): Promise<boolean> {
+        try {
+            const res = await fetch(`${API_URL}/verificar-stock/${cantidad}/${sucursal.id!}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(promocion)
+            });
+            if (!res.ok) throw new Error("Error al consultar la promocion");
             return await res.json();
         } catch (error) {
             console.error(error);
@@ -74,7 +89,7 @@ class PromocionService {
                 body: JSON.stringify(promocion)
             });
             console.log(JSON.stringify(promocion))
-            if (!res.ok) throw new Error("Error al actualizar artículo manufacturado");
+            if (!res.ok) throw new Error("Error al actualizar la promocion");
             return await res.json();
         } catch (error) {
             console.error(error);
@@ -82,43 +97,45 @@ class PromocionService {
         }
     }
 
-    // ...existing code...
-
-    async getAllFiltradas(
-        idSucursal?: number | null,
-        activa?: boolean,
-        tipoPromocion?: string,
-        fechaDesde?: Date,
-        fechaHasta?: Date,
+    async getPromocionesFiltradas(
+        filtros: {
+            denominacion?: string;
+            tipoPromocion?: "PROMOCION" | "HAPPYHOUR";
+            activa?: boolean;
+            eliminado?: boolean; // <-- agregado
+            fechaHoraDesde?: string; // formato ISO
+            fechaHoraHasta?: string;
+            precioMin?: number;
+            precioMax?: number;
+            idSucursal?: number;
+        },
         page: number = 0,
-        size: number = 10
-    ): Promise<any> {
-        try {
-            let url = `${API_URL}/filtradas?page=${page}&size=${size}`;
+        size: number = 10,
+        sort: string = "denominacion,asc"
+    ): Promise<{ content: Promocion[]; totalPages: number }> {
+        const params = new URLSearchParams();
 
-            if (idSucursal !== undefined && idSucursal !== null) {
-                url += `&idSucursal=${idSucursal}`;
-            }
-            if (activa !== undefined) {
-                url += `&activa=${activa}`;
-            }
-            if (tipoPromocion) {
-                url += `&tipoPromocion=${tipoPromocion}`;
-            }
-            if (fechaDesde) {
-                url += `&fechaDesde=${fechaDesde.toISOString().split('T')[0]}`;
-            }
-            if (fechaHasta) {
-                url += `&fechaHasta=${fechaHasta.toISOString().split('T')[0]}`;
-            }
+        if (filtros.denominacion) params.append("denominacion", filtros.denominacion);
+        if (filtros.tipoPromocion) params.append("tipoPromocion", filtros.tipoPromocion);
+        if (filtros.activa !== undefined) params.append("activa", filtros.activa.toString());
+        if (filtros.eliminado !== undefined) params.append("eliminado", filtros.eliminado.toString()); // <-- agregado
+        if (filtros.fechaHoraDesde) params.append("fechaHoraDesde", filtros.fechaHoraDesde);
+        if (filtros.fechaHoraHasta) params.append("fechaHoraHasta", filtros.fechaHoraHasta);
+        if (filtros.precioMin !== undefined) params.append("precioMin", filtros.precioMin.toString());
+        if (filtros.precioMax !== undefined) params.append("precioMax", filtros.precioMax.toString());
+        if (filtros.idSucursal !== undefined) params.append("idSucursal", filtros.idSucursal.toString());
 
-            const res = await fetch(url);
-            if (!res.ok) throw new Error("Error al obtener promociones filtradas");
-            return await res.json();
-        } catch (error) {
-            console.error(error);
-            throw error;
+        params.append("page", page.toString());
+        params.append("size", size.toString());
+        if (sort) params.append("sort", sort);
+
+        const response = await fetch(`${API_URL}/filtradas?${params.toString()}`);
+        if (!response.ok) {
+            throw new Error("Error al obtener promociones filtradas");
         }
+        console.log("PromocionService params:", params.toString());
+
+        return await response.json();
     }
 }
 

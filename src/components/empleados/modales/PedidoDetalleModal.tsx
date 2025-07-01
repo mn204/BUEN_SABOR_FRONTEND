@@ -25,6 +25,7 @@ const PedidoDetalleModal: React.FC<Props> = ({ show, onHide, pedido, onEstadoCha
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showResultModal, setShowResultModal] = useState(false);
   const [resultMessage, setResultMessage] = useState({ title: '', message: '', type: 'success' });
+  const [loadingFactura, setLoadingFactura] = useState(false); // Nuevo estado para la descarga
 
   const getColorEstado = (estado: Estado): string => {
     switch (estado) {
@@ -80,7 +81,55 @@ const PedidoDetalleModal: React.FC<Props> = ({ show, onHide, pedido, onEstadoCha
         return [];
     }
   };
+  // Función para descargar la factura usando el PedidoService
+  const handleDescargarFactura = async () => {
+    if (!pedido.cliente?.id || !pedido.id) {
+      setResultMessage({
+        title: 'Error',
+        message: 'No se pudo obtener la información necesaria para descargar la factura.',
+        type: 'error'
+      });
+      setShowResultModal(true);
+      return;
+    }
 
+    setLoadingFactura(true);
+
+    try {
+      // Usar el método del PedidoService
+      const facturaBlob = await PedidoService.descargarFactura(pedido.cliente.id, pedido.id);
+
+      // Crear URL del blob y descargar el archivo
+      const url = window.URL.createObjectURL(facturaBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `factura_pedido_${pedido.id}.pdf`; // Nombre del archivo
+      document.body.appendChild(link);
+      link.click();
+
+      // Limpiar
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      setResultMessage({
+        title: 'Éxito',
+        message: 'Factura descargada correctamente.',
+        type: 'success'
+      });
+      setShowResultModal(true);
+
+    } catch (error) {
+      console.error('Error al descargar la factura:', error);
+      setResultMessage({
+        title: 'Error',
+        message: 'No se pudo descargar la factura. Por favor, intenta nuevamente.',
+        type: 'error'
+      });
+      setShowResultModal(true);
+    } finally {
+      setLoadingFactura(false);
+    }
+  };
   const handleCambiarEstado = async () => {
     if (estadoSeleccionado !== pedido.estado && pedido.id) {
       if (estadoSeleccionado === Estado.CANCELADO) {
@@ -232,16 +281,22 @@ const PedidoDetalleModal: React.FC<Props> = ({ show, onHide, pedido, onEstadoCha
           <p><strong>Sucursal:</strong> {pedido.sucursal.nombre}</p>
           <p><strong>Forma de pago:</strong> {pedido.formaPago}</p>
           <p><strong>Forma de entrega:</strong> {pedido.tipoEnvio}</p>
-          <p className="mb-0"><strong>Domicilio:</strong></p>
-          {pedido.domicilio &&
-            <p>
-              {pedido.domicilio.detalles && <>Referencia: {pedido.domicilio.detalles}. </>}
-              {pedido.domicilio.calle} {pedido.domicilio.numero}, CP {pedido.domicilio.codigoPostal}, {pedido.domicilio.localidad?.nombre}
-              {pedido.domicilio.piso && `, Piso ${pedido.domicilio.piso}`}
-              {pedido.domicilio.nroDepartamento && `, Depto ${pedido.domicilio.nroDepartamento}`}
-            </p>
-          }
 
+          {pedido.tipoEnvio === "DELIVERY" && pedido.domicilio && (
+              <>
+                <p>
+                  <strong>Delivery:</strong>{" "}
+                  {pedido.empleado ? `${pedido.empleado.nombre} ${pedido.empleado.apellido}` : "Sin asignar"}
+                </p>
+                <p className="mb-0"><strong>Domicilio:</strong></p>
+                <p>
+                  {pedido.domicilio.detalles && <>Referencia: {pedido.domicilio.detalles}. </>}
+                  {pedido.domicilio.calle} {pedido.domicilio.numero}, CP {pedido.domicilio.codigoPostal}, {pedido.domicilio.localidad?.nombre}
+                  {pedido.domicilio.piso && `, Piso ${pedido.domicilio.piso}`}
+                  {pedido.domicilio.nroDepartamento && `, Depto ${pedido.domicilio.nroDepartamento}`}
+                </p>
+              </>
+          )}
           <Table striped bordered>
             <thead>
               <tr>
@@ -263,9 +318,9 @@ const PedidoDetalleModal: React.FC<Props> = ({ show, onHide, pedido, onEstadoCha
                     : "Sin nombre";
 
                 const precioUnitario = esArticulo
-                  ? d.articulo?.precioVenta?.toFixed(2)
+                  ? d.subTotal / d.cantidad
                   : esPromocion
-                    ? d.promocion?.precioPromocional.toFixed(2)
+                    ? d.subTotal / d.cantidad
                     : "-";
 
                 return (
@@ -298,7 +353,52 @@ const PedidoDetalleModal: React.FC<Props> = ({ show, onHide, pedido, onEstadoCha
 
           </Table>
 
-          <p><strong>Total:</strong> ${pedido.total.toFixed(2)}</p>
+          {/* Calcular total bruto (sin descuento ni recargo) */}
+          {(() => {
+            const totalBruto = pedido.detalles.reduce((acc, d) => acc + d.subTotal, 0);
+            let diferencia = 0;
+            let mensaje = null;
+            if (pedido.tipoEnvio === "TAKEAWAY") {
+              diferencia = totalBruto - pedido.total;
+              mensaje = (
+                <div className="alert alert-success py-2 mb-2 d-flex align-items-center" style={{fontSize: '1.05rem'}}>
+                  <i className="bi bi-cash-coin me-2"></i>
+                  <span>
+                    <strong>Descuento TAKEAWAY (10%):</strong> -${diferencia.toFixed(2)}
+                  </span>
+                </div>
+              );
+            } else if (pedido.tipoEnvio === "DELIVERY") {
+              diferencia = pedido.total - totalBruto;
+              mensaje = (
+                <div className="alert alert-info py-2 mb-2 d-flex align-items-center" style={{fontSize: '1.05rem'}}>
+                  <i className="bi bi-truck me-2"></i>
+                  <span>
+                    <strong>Recargo DELIVERY (+$2000):</strong> +${diferencia.toFixed(2)}
+                  </span>
+                </div>
+              );
+            }
+            return (
+              <>
+                <p><strong>Total de productos:</strong> ${totalBruto.toFixed(2)}</p>
+                {mensaje}
+                {/* Total final destacado y aclarativo */}
+                <div className="alert alert-dark py-2 mb-2 d-flex align-items-center justify-content-center" style={{fontSize: '1.15rem', border: '2px solid #222', fontWeight: 600}}>
+                  <i className="bi bi-receipt me-2" style={{fontSize: '1.4rem'}}></i>
+                  <span>
+                    <strong>Total final:</strong> <span style={{color: '#198754', fontSize: '1.25rem'}}>${pedido.total.toFixed(2)}</span>
+                    {pedido.tipoEnvio === "TAKEAWAY" && (
+                      <span className="ms-2 text-success" style={{fontSize: '1rem'}}>(con descuento TAKEAWAY aplicado)</span>
+                    )}
+                    {pedido.tipoEnvio === "DELIVERY" && (
+                      <span className="ms-2 text-info" style={{fontSize: '1rem'}}>(con recargo DELIVERY aplicado)</span>
+                    )}
+                  </span>
+                </div>
+              </>
+            );
+          })()}
         </Modal.Body>
 
         <Modal.Footer className="d-flex justify-content-between align-items-center">
@@ -368,10 +468,18 @@ const PedidoDetalleModal: React.FC<Props> = ({ show, onHide, pedido, onEstadoCha
               Cerrar
             </Button>
             <Button
-              variant="primary"
-              onClick={() => window.open(`http://localhost:8080/api/pedidos/cliente/${pedido.cliente?.id}/pedido/${pedido.id}/factura`, '_blank')}
+                variant="primary"
+                onClick={handleDescargarFactura}
+                disabled={loadingFactura}
             >
-              Descargar Factura
+              {loadingFactura ? (
+                  <>
+                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                    Descargando...
+                  </>
+              ) : (
+                  'Descargar Factura'
+              )}
             </Button>
           </div>
         </Modal.Footer>

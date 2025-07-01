@@ -7,22 +7,25 @@ import type Pais from "../../models/Pais.ts";
 import type Provincia from "../../models/Provincia.ts";
 import type Localidad from "../../models/Localidad.ts";
 import {obtenerLocalidades, obtenerPaises, obtenerProvincias} from "../../services/LocalizacionService.ts";
-import {obtenerUsuarioPorDni} from "../../services/UsuarioService.ts";
 import {registrarCliente} from "../../services/ClienteService.ts";
 import {useAuth} from "../../context/AuthContext.tsx";
+import { Modal } from "react-bootstrap";
 
 
 const RegisterGoogle = ({ onFinish }: { onFinish: () => void }) => {
 
     const [loading, setLoading] = useState(false);
     const [formError, setFormError] = useState<string | null>(null);
-    const [dniError, setDniError] = useState<string | null>(null);
+    const [showSuccessModal, setShowSuccessModal] = useState(false);
+    const [modalMessage, setModalMessage] = useState("");
+    const [modalTitle, setModalTitle] = useState("");
+    const [telefonoError, setTelefonoError] = useState('');
 
     const [nombre, setNombre] = useState("");
     const [apellido, setApellido] = useState("");
-    const [dni, setDni] = useState("");
     const [fechaNacimiento, setFechaNacimiento] = useState("");
-    const [telefono, setTelefono] = useState("");
+    const [telefono, setTelefono] = useState(""); // solo números
+    const [telefonoFormateado, setTelefonoFormateado] = useState("");
     const [pais, setPais] = useState("");
     const [provincia, setProvincia] = useState("");
     const [localidadId, setLocalidadId] = useState<number | "">("");
@@ -62,32 +65,21 @@ const RegisterGoogle = ({ onFinish }: { onFinish: () => void }) => {
         cargarDatos();
     }, []);
 
-    const handleDniChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const value = e.target.value;
 
-        // Solo permitir dígitos (sin puntos, comas ni negativos)
-        if (!/^\d*$/.test(value)) return;
-
-        setDni(value);
-        setDniError(null);
-
-        // Si tiene algún valor, consultamos al backend
-        if (value) {
-            try {
-                const usuario = await obtenerUsuarioPorDni(value);
-                if (usuario) {
-                    setDniError("DNI ya está en uso");
-                }
-            } catch (error) {
-                console.error("Error al verificar DNI:", error);
-            }
-        }
+    const esTelefonoValido = (telefono: string): boolean => {
+        const soloNumeros = telefono.replace(/\D/g, "");
+        return soloNumeros.length === 10;
     };
-    const handleTelefonoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const value = e.target.value;
-        if (/^\d*$/.test(value)) {
-            setTelefono(value);
+
+    const formatearTelefono = (valor: string): string => {
+        // Elimina cualquier cosa que no sea número
+        const soloNumeros = valor.replace(/\D/g, "").slice(0, 10); // máx 10 dígitos
+
+        if (soloNumeros.length <= 3) return soloNumeros;
+        if (soloNumeros.length <= 6) {
+            return `${soloNumeros.slice(0, 3)}-${soloNumeros.slice(3)}`;
         }
+        return `${soloNumeros.slice(0, 3)}-${soloNumeros.slice(3, 6)}-${soloNumeros.slice(6)}`;
     };
     //numeor calle
     const handleNumeroChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -115,14 +107,12 @@ const RegisterGoogle = ({ onFinish }: { onFinish: () => void }) => {
 
     const handleSubmit = async () => {
 
-        if (!nombre || !apellido || !dni || !fechaNacimiento || !telefono || !pais || !provincia || !localidadId || !codigoPostal || !calle || !numero || !detalles) {
+        if (!nombre || !apellido  || !fechaNacimiento || !telefono || !pais || !provincia || !localidadId || !codigoPostal || !calle || !numero || !detalles) {
             setFormError("Te faltan campos obligatorios");
             return;
         }
-        const usuarioPorDni = await obtenerUsuarioPorDni(dni.toString());
-        if (usuarioPorDni) {
-            setFormError("El DNI ya está registrado.");
-            setLoading(false);
+        if (!esTelefonoValido(telefono)) {
+            setTelefonoError("El número debe tener exactamente 10 dígitos.");
             return;
         }
 
@@ -134,17 +124,6 @@ const RegisterGoogle = ({ onFinish }: { onFinish: () => void }) => {
             setFormError("Error: Usuario no autenticado");
             setLoading(false);
             return;
-        }
-        try {
-            // Verificar DNI una vez más antes de enviar
-            const usuarioPorDni = await obtenerUsuarioPorDni(dni.toString());
-            if (usuarioPorDni) {
-                setFormError("El DNI ya está registrado.");
-                setLoading(false);
-                return;
-            }
-        } catch (error) {
-            // Si el DNI no existe, podemos continuar
         }
 
 
@@ -160,7 +139,7 @@ const RegisterGoogle = ({ onFinish }: { onFinish: () => void }) => {
                     numero: parseInt(numero),
                     codigoPostal: codigoPostal,
                     piso: piso,
-                    departamento: departamento,
+                    nroDepartamento: departamento,
                     detalles: detalles,
                     eliminado: false,
                     localidad: {
@@ -172,21 +151,22 @@ const RegisterGoogle = ({ onFinish }: { onFinish: () => void }) => {
                 email: user.email ?? "",
                 rol: Rol.CLIENTE,
                 firebaseUid: user.uid,
-                dni: dni.toString(),
                 providerId: user.providerData[0]?.providerId || "google.com",
                 eliminado: false
-            },
-            pedidos: [] // si tu clase no lo requiere aún, podés omitir este campo
+            }
         };
+
         try {
             console.log("Cliente a enviar:", JSON.stringify(cliente, null, 2));
 
             const response = await registrarCliente(cliente);
             console.log("Respuesta del backend:", response);
 
-            alert("¡Registro completo! Bienvenido/a a El Buen Sabor");
-            completeGoogleRegistration(); // Esto actualizará el contexto
-            onFinish(); // Esto cerrará el modal
+            setModalTitle("¡Registro completo!");
+            setModalMessage("Bienvenido/a a El Buen Sabor");
+            setShowSuccessModal(true);
+         //   completeGoogleRegistration(); // Esto actualizará el contexto
+           // onFinish(); // Esto cerrará el modal
         } catch (error) {
             console.error("Error al registrar cliente:", error);
             setFormError("Error al completar el registro. Intenta nuevamente.");
@@ -234,20 +214,6 @@ const RegisterGoogle = ({ onFinish }: { onFinish: () => void }) => {
                             required
                         />
                     </Form.Group>
-                    <Form.Group controlId="dni" className="mb-2">
-                        <Form.Control
-                            type="text"
-                            placeholder="DNI"
-                            value={dni}
-                            onChange={handleDniChange}
-                            isInvalid={!!dniError}
-                            disabled={loading}
-                            required
-                        />
-                        <Form.Control.Feedback type="invalid">
-                            {dniError}
-                        </Form.Control.Feedback>
-                    </Form.Group>
 
                     <Form.Group controlId="fechaNacimiento" className="mb-2">
                         <div className="d-flex p-1 align-items-end" style={{ width: "100%" }}>
@@ -268,11 +234,30 @@ const RegisterGoogle = ({ onFinish }: { onFinish: () => void }) => {
                         <Form.Control
                             type="text"
                             placeholder="Teléfono"
-                            value={telefono}
-                            onChange={handleTelefonoChange}
+                            value={telefonoFormateado}
+                            onChange={(e) => {
+                                const input = e.target.value;
+                                const soloNumeros = input.replace(/\D/g, "").slice(0, 10); // Solo 10 dígitos
+
+                                setTelefono(soloNumeros); // Guardamos sin formato
+                                setTelefonoFormateado(formatearTelefono(soloNumeros)); // Mostramos formateado
+
+                                // Validamos longitud
+                                if (soloNumeros.length < 10) {
+                                    setTelefonoError("El número debe tener exactamente 10 dígitos.");
+                                } else {
+                                    setTelefonoError('');
+                                }
+                            }}
+                            isInvalid={!!telefonoError}
                             disabled={loading}
-                            required
                         />
+                        <Form.Control.Feedback type="invalid">
+                            {telefonoError}
+                        </Form.Control.Feedback>
+                        <Form.Text className="text-muted">
+                            El número debe tener 10 dígitos, sin el 15 y con el código de área.
+                        </Form.Text>
                     </Form.Group>
 
                     <Form.Group controlId="pais" className="mb-2">
@@ -375,7 +360,7 @@ const RegisterGoogle = ({ onFinish }: { onFinish: () => void }) => {
                             variant="dark"
                             size="lg"
                             onClick={handleSubmit}
-                            disabled={loading || !!dniError}
+                            disabled={loading }
                         >
                             {loading ? "Completando registro..." : "Completar Registro"}
                         </Button>
@@ -386,7 +371,27 @@ const RegisterGoogle = ({ onFinish }: { onFinish: () => void }) => {
                 </>
             </Form>
             {formError && <div className="alert alert-danger mt-3">{formError}</div>}
-
+            {/* Modal de éxito */}
+            <Modal show={showSuccessModal} onHide={() => setShowSuccessModal(false)} centered>
+                <Modal.Header closeButton>
+                    <Modal.Title>{modalTitle}</Modal.Title>
+                </Modal.Header>
+                <Modal.Body>
+                    {modalMessage}
+                </Modal.Body>
+                <Modal.Footer>
+                    <Button
+                        variant="success"
+                        onClick={() => {
+                            setShowSuccessModal(false);
+                            completeGoogleRegistration(); // Esto actualizará el contexto
+                            onFinish(); // Esto cerrará el modal
+                        }}
+                    >
+                        Continuar
+                    </Button>
+                </Modal.Footer>
+            </Modal>
         </div>
     );
 };

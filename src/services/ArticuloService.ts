@@ -7,7 +7,7 @@ class ArticuloService {
     async getAll(): Promise<Articulo[]> {
         try {
             const res = await fetch(`${API_URL}`);
-            if (!res.ok) throw new Error("Error al obtener categorías");
+            if (!res.ok) throw new Error("Error al obtener los articulos");
             return await res.json();
         } catch (error) {
             console.error(error);
@@ -17,15 +17,11 @@ class ArticuloService {
 
     async consultarStock(articulo: Articulo, sucursalId: number): Promise<boolean> {
         try {
-            console.log("Enviando articulo:", articulo);
-console.log("ID sucursal:", sucursalId);
-
             const res = await fetch(`${API_URL}/verificar-stock/${sucursalId}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(articulo)
             });
-            if (!res.ok) throw new Error("Error al obtener categorías");
             return await res.json();
         } catch (error) {
             console.error(error);

@@ -4,6 +4,7 @@ import Pedido from "../../../models/Pedido.ts";
 import pedidoService from "../../../services/PedidoService.ts";
 import Estado from "../../../models/enums/Estado.ts";
 import dayjs from "dayjs";
+import ModalMensaje from "./ModalMensaje";
 
 interface Props {
     show: boolean;
@@ -14,6 +15,16 @@ interface Props {
 const DeliveryModal: React.FC<Props> = ({ show, onHide, pedido }) => {
     const [showConfirm, setShowConfirm] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [modalMensaje, setModalMensaje] = useState({
+        show: false,
+        mensaje: "",
+        titulo: "Mensaje",
+        variante: "danger" as "primary" | "success" | "danger" | "warning" | "info" | "secondary"
+    });
+
+    const mostrarModalMensaje = (mensaje: string, variante: typeof modalMensaje.variante = "danger", titulo = "Error") => {
+        setModalMensaje({ show: true, mensaje, variante, titulo });
+    };
 
     if (!pedido) return null;
 
@@ -23,9 +34,8 @@ const DeliveryModal: React.FC<Props> = ({ show, onHide, pedido }) => {
     const detalles = pedido.detalles;
 
     const abrirEnGoogleMaps = () => {
-        // Verificar que localidad no sea null antes de usarla
         if (!domicilio.localidad) {
-            alert("No se puede abrir el mapa: localidad no disponible");
+            mostrarModalMensaje("No se puede abrir el mapa: localidad no disponible", "warning", "Advertencia");
             return;
         }
         const direccion = `${domicilio.calle} ${domicilio.numero}, ${domicilio.localidad.nombre}`;
@@ -42,9 +52,9 @@ const DeliveryModal: React.FC<Props> = ({ show, onHide, pedido }) => {
             };
             await pedidoService.cambiarEstadoPedido(pedidoActualizado);
             setShowConfirm(false);
-            onHide(); // cerrar modal principal después de actualizar
+            onHide();
         } catch (error) {
-            alert("Error al cambiar el estado del pedido");
+            mostrarModalMensaje("Error al cambiar el estado del pedido", "danger", "Error");
             console.error(error);
         } finally {
             setLoading(false);
@@ -177,6 +187,14 @@ const DeliveryModal: React.FC<Props> = ({ show, onHide, pedido }) => {
                     </Button>
                 </Modal.Footer>
             </Modal>
+
+            <ModalMensaje
+                show={modalMensaje.show}
+                onHide={() => setModalMensaje({ ...modalMensaje, show: false })}
+                mensaje={modalMensaje.mensaje}
+                titulo={modalMensaje.titulo}
+                variante={modalMensaje.variante}
+            />
         </>
     );
 };

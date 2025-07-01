@@ -3,11 +3,12 @@ import CategoriaService from "../../../services/CategoriaService.ts";
 import Categoria from "../../../models/Categoria.ts";
 import Button from "react-bootstrap/Button";
 import Modal from "react-bootstrap/Modal";
-import BotonVer from "../../layout/BotonVer.tsx";
-import BotonEliminar from "../../layout/BotonEliminar.tsx";
-import BotonModificar from "../../layout/BotonModificar.tsx";
-import BotonAlta from "../../layout/BotonAlta.tsx";
+import BotonVer from "../../layout/botones/BotonVer.tsx";
+import BotonEliminar from "../../layout/botones/BotonEliminar.tsx";
+import BotonModificar from "../../layout/botones/BotonModificar.tsx";
+import BotonAlta from "../../layout/botones/BotonAlta.tsx";
 import { Link } from "react-router-dom";
+import ModalMensaje from "../modales/ModalMensaje";
 
 function GrillaCategorias() {
   const [categorias, setCategorias] = useState<Categoria[]>([]);
@@ -16,6 +17,27 @@ function GrillaCategorias() {
 
   const [showModal, setShowModal] = useState(false);
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState<Categoria | null>(null);
+
+  // Estado para modal de mensaje
+  const [modalMensaje, setModalMensaje] = useState({
+    show: false,
+    mensaje: "",
+    titulo: "Mensaje",
+    variante: "success" as "primary" | "success" | "danger" | "warning" | "info" | "secondary"
+  });
+  const mostrarModalMensaje = (mensaje: string, variante: typeof modalMensaje.variante = "success", titulo = "Mensaje") => {
+    setModalMensaje({ show: true, mensaje, variante, titulo });
+  };
+  // Estado para modal de confirmación
+  const [modalConfirm, setModalConfirm] = useState({
+    show: false,
+    mensaje: "",
+    onConfirm: () => {},
+  });
+
+  const pedirConfirmacion = (mensaje: string, onConfirm: () => void) => {
+    setModalConfirm({ show: true, mensaje, onConfirm });
+  };
 
   useEffect(() => {
     cargarCategorias();
@@ -35,25 +57,27 @@ function GrillaCategorias() {
   };
 
   const darDeAlta = async (id: number) => {
-    if (!window.confirm("¿Seguro que desea dar de alta esta categoría?")) return;
-    try {
-      await CategoriaService.changeEliminado(id);
-      cargarCategorias();
-      alert("Categoría dada de alta correctamente");
-    } catch (err) {
-      alert("Error al dar de alta la categoría");
-    }
+    pedirConfirmacion("¿Seguro que desea dar de alta esta categoría?", async () => {
+      try {
+        await CategoriaService.changeEliminado(id);
+        cargarCategorias();
+        mostrarModalMensaje("Categoría dada de alta correctamente", "success", "Éxito");
+      } catch (err) {
+        mostrarModalMensaje("Error al dar de alta la categoría", "danger", "Error");
+      }
+    });
   }
 
   const eliminarCategoria = async (id: number) => {
-    if (!window.confirm("¿Seguro que desea eliminar esta categoría?")) return;
-    try {
-      await CategoriaService.delete(id);
-      cargarCategorias();
-      alert("Categoría eliminada correctamente");
-    } catch (err) {
-      alert("Error al eliminar la categoría");
-    }
+    pedirConfirmacion("¿Seguro que desea eliminar esta categoría?", async () => {
+      try {
+        await CategoriaService.delete(id);
+        cargarCategorias();
+        mostrarModalMensaje("Categoría eliminada correctamente", "success", "Éxito");
+      } catch (err) {
+        mostrarModalMensaje("Error al eliminar la categoría", "danger", "Error");
+      }
+    });
   };
 
   const handleActualizar = (cat: Categoria) => {
@@ -131,6 +155,33 @@ function GrillaCategorias() {
         </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={handleCloseModal}>Cerrar</Button>
+        </Modal.Footer>
+      </Modal>
+
+      <ModalMensaje
+        show={modalMensaje.show}
+        onHide={() => setModalMensaje({ ...modalMensaje, show: false })}
+        mensaje={modalMensaje.mensaje}
+        titulo={modalMensaje.titulo}
+        variante={modalMensaje.variante}
+      />
+      <Modal show={modalConfirm.show} onHide={() => setModalConfirm({ ...modalConfirm, show: false })} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Confirmar acción</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <p className="m-0">{modalConfirm.mensaje}</p>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setModalConfirm({ ...modalConfirm, show: false })}>
+            Cancelar
+          </Button>
+          <Button variant="primary" onClick={() => {
+            setModalConfirm({ ...modalConfirm, show: false });
+            modalConfirm.onConfirm();
+          }}>
+            Confirmar
+          </Button>
         </Modal.Footer>
       </Modal>
     </div>

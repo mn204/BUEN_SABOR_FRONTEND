@@ -14,6 +14,8 @@ import { FaPlus } from "react-icons/fa6";
 import ModalDomicilio from "../clientes/ModalDomicilio";
 import SucursalService from "../../services/SucursalService";
 import { useNavigate } from "react-router-dom";
+import ModalCambioSucursal from './ModalCambioSucursal';
+import ModalMensaje from "../empleados/modales/ModalMensaje";
 
 export function Carrito() {
   const { cliente, setCliente } = useAuth();
@@ -30,7 +32,7 @@ export function Carrito() {
   const { sucursalActualUsuario } = useSucursalUsuario();
   const [modalVisible, setModalVisible] = useState(false);
   const [mensajeCambioSucursal, setMensajeCambioSucursal] = useState<string>("");
-
+  const [mostrarModalPedido, setMostrarModalPedido] = useState(false);
   if (!carritoCtx) return null;
 
   const handleModalSubmit = (clienteActualizado: any) => {
@@ -51,30 +53,11 @@ export function Carrito() {
 
     const manejarCambioSucursal = async () => {
       try {
-        // Obtener promociones disponibles en la nueva sucursal
         const promosSucursal = await SucursalService.getAllBySucursalId(sucursalActualUsuario.id!);
-
-        // Usar la función cambiarSucursal del contexto
-        const resultado = await cambiarSucursal(sucursalActualUsuario.id!, promosSucursal);
-
-        // Mostrar mensaje si hay cambios
-        if (resultado.mensaje) {
-          setMensajeCambioSucursal(resultado.mensaje);
-          // Limpiar el mensaje después de 5 segundos
-          setTimeout(() => {
-            setMensajeCambioSucursal("");
-          }, 5000);
-        }
-
-        // Actualizar la sucursal en el pedido
+        await cambiarSucursal(sucursalActualUsuario.id!, promosSucursal);
         pedido.sucursal = sucursalActualUsuario;
-
       } catch (error) {
         console.error("Error al cambiar sucursal:", error);
-        setMensajeCambioSucursal("Error al cambiar de sucursal. Intente nuevamente.");
-        setTimeout(() => {
-          setMensajeCambioSucursal("");
-        }, 5000);
       }
     };
 
@@ -105,7 +88,10 @@ export function Carrito() {
     limpiarCarrito,
     guardarPedidoYObtener,
     agregarPromocionAlCarrito,
-    cambiarSucursal, // Agregar la función cambiarSucursal del contexto
+    cambiarSucursal,
+    showModalCambioSucursal,
+    datosModalCambioSucursal,
+    cerrarModalCambioSucursal,// Agregar la función cambiarSucursal del contexto
   } = carritoCtx;
 
   const handleAgregar = () => {
@@ -120,21 +106,27 @@ export function Carrito() {
     setStockError(null);
 
     try {
-      const stockDisponible = await PedidoService.consultarStock(pedido)
-      if (!stockDisponible) {
-        setStockError("No hay stock suficiente para algunos productos en la sucursal seleccionada.");
-        return false;
+      // Si hay stock suficiente, el backend devuelve true
+      const stockDisponible = await PedidoService.consultarStock(pedido);
+      console.log("Stock disponible:", stockDisponible);
+      return stockDisponible; // Si es false, es decisión del backend, pero no debería llegar acá con excepciones.
+    } catch (error: any) {
+      // 🔥 Esta parte es la importante: capturás el mensaje del backend
+      const parsed = JSON.parse(error.message);
+      if (parsed.errorMsg) {
+        setStockError(
+          `<span>Stock insuficiente en la sucursal: ${sucursalActualUsuario?.nombre}</span><span>${parsed.errorMsg}</span>`
+        );
+      } else {
+        setStockError("Error al verificar el stock.");
       }
 
-      return true;
-    } catch (error) {
-      console.error('Error verificando stock:', error);
-      setStockError("Error al verificar el stock. Intenta nuevamente.");
       return false;
     } finally {
       setVerificandoStock(false);
     }
   };
+
 
   const handleProceedToStep2 = async () => {
     if (!cliente) {
@@ -173,8 +165,10 @@ export function Carrito() {
     if (!stockOk) {
       return;
     }
+    pedido.total = pedido.total * 0.9;
     const pedidoFinal = await guardarPedidoYObtener();
     if (pedidoFinal) {
+      setMostrarModalPedido(true);
       limpiarCarrito()
     }
     window.location.href = `/pedidoConfirmado/${pedidoFinal!.id}`;
@@ -187,10 +181,16 @@ export function Carrito() {
     if (!stockOk) {
       return;
     }
+    if (tipoEnvio === 'TAKEAWAY') {
+      pedido.total = pedido.total * 0.9; // Aplicar descuento del 10% para Takeaway
+    }else if (tipoEnvio === 'DELIVERY' && domicilioSeleccionado) {
+      pedido.total = pedido.total + 2000; // Agregar costo de envío
+    }
+
     const pedidoFinal = await guardarPedidoYObtener();
     if (pedidoFinal) {
       setPedidoGuardado(pedidoFinal);
-      console.log(pedidoFinal)
+      setMostrarModalPedido(true);
       limpiarCarrito()
     }
   };
@@ -256,13 +256,16 @@ export function Carrito() {
           <div className="container-fluid px-4 py-3">
             {stockError && (
               <div className="alert alert-danger mx-auto mb-4" role="alert" style={{ maxWidth: "800px" }}>
-                <div className="d-flex align-items-center">
+                <div className="d-flex align-items-center gap-3">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="me-2">
                     <circle cx="12" cy="12" r="10"></circle>
                     <line x1="15" y1="9" x2="9" y2="15"></line>
                     <line x1="9" y1="9" x2="15" y2="15"></line>
                   </svg>
-                  {stockError}
+                  <div
+                    className="d-flex flex-column justify-content-center align-items-start"
+                    dangerouslySetInnerHTML={{ __html: stockError }}
+                  />
                 </div>
               </div>
             )}
@@ -304,8 +307,8 @@ export function Carrito() {
                                       objectFit: "cover",
                                       transition: "transform 0.2s ease"
                                     }}
-                                    onMouseEnter={(e) => e.target.style.transform = "scale(1.05)"}
-                                    onMouseLeave={(e) => e.target.style.transform = "scale(1)"}
+                                    onMouseEnter={(e) => ((e.target as HTMLImageElement).style.transform = "scale(1.05)")}
+                                    onMouseLeave={(e) => ((e.target as HTMLImageElement).style.transform = "scale(1)")}
                                   />
                                   <div className="position-absolute top-0 start-0 m-1">
                                     <span className="badge bg-success rounded-pill px-2 py-1">
@@ -409,8 +412,8 @@ export function Carrito() {
                                     objectFit: "cover",
                                     transition: "transform 0.2s ease"
                                   }}
-                                  onMouseEnter={(e) => e.target.style.transform = "scale(1.05)"}
-                                  onMouseLeave={(e) => e.target.style.transform = "scale(1)"}
+                                  onMouseEnter={(e) => ((e.target as HTMLImageElement).style.transform = "scale(1.05)")}
+                                  onMouseLeave={(e) => ((e.target as HTMLImageElement).style.transform = "scale(1)")}
                                 />
                               </div>
                             </div>
@@ -428,7 +431,7 @@ export function Carrito() {
                                     <button
                                       className="btn btn-outline-danger btn-sm rounded-circle p-0 d-flex align-items-center justify-content-center flex-shrink-0"
                                       style={{ width: "32px", height: "32px", fontSize: "14px" }}
-                                      onClick={() => quitarDelCarrito(item.articulo!.id)}
+                                      onClick={() => quitarDelCarrito(item.articulo!.id!)}
                                       title="Eliminar del carrito"
                                     >
                                       ×
@@ -438,7 +441,7 @@ export function Carrito() {
                                   {/* Precio unitario */}
                                   <div className="mb-3">
                                     <span className="badge bg-light text-dark border px-3 py-2 rounded-pill">
-                                      <strong>${item.articulo!.precioVenta.toFixed(2)}</strong>
+                                      <strong>${item.articulo!.precioVenta!.toFixed(2)}</strong>
                                     </span>
                                   </div>
                                 </div>
@@ -454,7 +457,7 @@ export function Carrito() {
                                         <div className="btn-group" role="group">
                                           <button
                                             className="btn btn-outline-secondary btn-sm px-2 px-sm-3"
-                                            onClick={() => restarDelCarrito(item.articulo!.id)}
+                                            onClick={() => restarDelCarrito(item.articulo!.id!)}
                                             disabled={item.cantidad <= 1}
                                           >
                                             −
@@ -577,7 +580,7 @@ export function Carrito() {
                   <div className="col-md-6">
                     <div className="d-grid gap-2">
                       <button
-                        className={`btn py-3 ${tipoEnvio === 'DELIVERY'
+                        className={`btn py-3 ${tipoEnvio === 'DELIVERY' && domicilioSeleccionado
                           ? 'btn-success'
                           : 'btn-outline-success'
                           }`}
@@ -603,7 +606,12 @@ export function Carrito() {
                         <div>
                           <strong>🏪 Retiro en Local</strong>
                           <br />
-                          <small>Retirá tu pedido en nuestro local</small>
+                          <small>
+                            Retirá tu pedido en nuestro local
+                            <span className="ms-2 badge bg-warning text-dark" style={{ fontSize: '0.9em', marginLeft: '8px' }}>
+                              10% OFF
+                            </span>
+                          </small>
                         </div>
                       </button>
                     </div>
@@ -690,13 +698,26 @@ export function Carrito() {
                 {(carrito && carrito.length > 0 ? carrito : pedidoGuardado?.detalles || []).map((item) => (
                   <div key={item.articulo?.id || item.id} className="d-flex justify-content-between mb-2">
                     <span>
-                      {item.cantidad}x {item.articulo?.denominacion}
+                      {item.cantidad}x {item.articulo?.denominacion || item.promocion?.denominacion}
                     </span>
                     <span>
-                      ${(item.subTotal || (item.cantidad * item.articulo!.precioVenta)).toFixed(2)}
+                      ${(item.subTotal || (item.cantidad * item.articulo!.precioVenta!)).toFixed(2)}
                     </span>
                   </div>
                 ))}
+
+                {tipoEnvio === 'DELIVERY' && (
+                  <div key="7000" className="d-flex justify-content-between mb-2">
+                    <span className="text-muted">Envío:</span>
+                    <span className="text-muted">$2000</span>
+                  </div>
+                )}
+                {tipoEnvio === 'TAKEAWAY' && (
+                  <div key="7000" className="d-flex justify-content-between mb-2">
+                    <span className="text-muted">Descuento:</span>
+                    <span className="text-muted">10%</span>
+                  </div>
+                )}
 
                 {/* Mostrar mensaje si no hay items en ninguno */}
                 {(!carrito || carrito.length === 0) && (!pedidoGuardado?.detalles || pedidoGuardado.detalles.length === 0) && (
@@ -711,9 +732,17 @@ export function Carrito() {
                   <strong>
                     ${(() => {
                       const items = carrito && carrito.length > 0 ? carrito : pedidoGuardado?.detalles || [];
-                      return items.reduce((acc, item) => {
-                        return acc + (item.subTotal || (item.cantidad * item.articulo!.precioVenta));
-                      }, 0).toFixed(2);
+                      const subtotal = items.reduce((acc, item) => {
+                        return acc + (item.subTotal || (item.cantidad * item.articulo!.precioVenta!));
+                      }, 0);
+
+                        if (tipoEnvio === 'TAKEAWAY') {
+                        return (subtotal * 0.9).toFixed(2); // 10% descuento
+                        } else if (tipoEnvio === 'DELIVERY') {
+                        return (subtotal + 2000).toFixed(2); // Envío $2000
+                        } else {
+                        return subtotal.toFixed(2); // Solo subtotal
+                        }
                     })()}
                   </strong>
                 </div>
@@ -836,12 +865,12 @@ export function Carrito() {
                             onClick={() => handleDomicilioSelect(domicilio)}
                             onMouseEnter={(e) => {
                               if (domicilioSeleccionado?.id !== domicilio.id) {
-                                e.target.classList.add('shadow-sm', 'border-primary', 'border-opacity-50');
+                                (e.target as HTMLElement).classList.add('shadow-sm', 'border-primary', 'border-opacity-50');
                               }
                             }}
                             onMouseLeave={(e) => {
                               if (domicilioSeleccionado?.id !== domicilio.id) {
-                                e.target.classList.remove('shadow-sm', 'border-primary', 'border-opacity-50');
+                                (e.target as HTMLElement).classList.remove('shadow-sm', 'border-primary', 'border-opacity-50');
                               }
                             }}
                           >
@@ -928,15 +957,15 @@ export function Carrito() {
                 </div>
               </div>
               {mensajeCambioSucursal && (
-                  <div className="alert alert-info alert-dismissible fade show" role="alert">
-                    <strong>Cambio de sucursal:</strong> {mensajeCambioSucursal}
-                    <button
-                        type="button"
-                        className="btn-close"
-                        onClick={() => setMensajeCambioSucursal("")}
-                        aria-label="Close"
-                    ></button>
-                  </div>
+                <div className="alert alert-info alert-dismissible fade show" role="alert">
+                  <strong>Cambio de sucursal:</strong> {mensajeCambioSucursal}
+                  <button
+                    type="button"
+                    className="btn-close"
+                    onClick={() => setMensajeCambioSucursal("")}
+                    aria-label="Close"
+                  ></button>
+                </div>
               )}
 
               <ModalDomicilio
@@ -950,6 +979,18 @@ export function Carrito() {
           </div>
         </div>
       )}
+      <ModalCambioSucursal
+        show={showModalCambioSucursal}
+        onHide={cerrarModalCambioSucursal}
+        promocionesEliminadas={datosModalCambioSucursal.promocionesEliminadas}
+        promocionesRestauradas={datosModalCambioSucursal.promocionesRestauradas}
+        mensaje={datosModalCambioSucursal.mensaje}
+      />
+      <ModalMensaje
+        mensaje="Pedido Guardado"
+        show={mostrarModalPedido}
+        onHide={() => setMostrarModalPedido(false)}
+      />
     </>
   );
 }

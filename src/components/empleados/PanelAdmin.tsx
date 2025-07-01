@@ -1,25 +1,24 @@
 import { Container, Row, Col, Nav } from 'react-bootstrap';
 import '../../styles/panelAdmin.css';
 
-import Computadora from '../../assets/svgAdmin/computadora.svg';
-import Dashboard from '../../assets/svgAdmin/dashboard.svg';
-import Pedidos from '../../assets/svgAdmin/pedidos.svg';
-import Cocina from '../../assets/svgAdmin/cocina.svg';
-import Delivery from '../../assets/svgAdmin/delivery.svg';
-import Facturacion from '../../assets/svgAdmin/facturacion.svg';
-import Productos from '../../assets/svgAdmin/productos.svg';
-import Insumos from '../../assets/svgAdmin/insumos.svg';
-import Categorias from '../../assets/svgAdmin/categorias.svg';
-import Stock from '../../assets/svgAdmin/stock.svg';
-import Estadisticas from '../../assets/svgAdmin/estadisticas.svg';
-import Usuario from '../../assets/svgAdmin/usuario-black.svg';
+import Computadora from '../../assets/admin/computadora.svg';
+import Dashboard from '../../assets/admin/dashboard.svg';
+import Pedidos from '../../assets/admin/pedidos.svg';
+import Cocina from '../../assets/admin/cocina.svg';
+import Delivery from '../../assets/admin/delivery.svg';
+import Productos from '../../assets/admin/productos.svg';
+import Insumos from '../../assets/admin/insumos.svg';
+import Categorias from '../../assets/admin/categorias.svg';
+import Stock from '../../assets/admin/stock.svg';
+import Estadisticas from '../../assets/admin/estadisticas.svg';
+import Usuario from '../../assets/admin/usuario-black.svg';
 import GrillaArticuloManufacturado from "./grillas/GrillaArticuloManufacturado.tsx";
 import GrillaCliente from "./grillas/GrillaCliente.tsx";
 import GrillaEmpleado from "./grillas/GrillaEmpleado.tsx";
+import GrillaSucursal from "./grillas/GrillaSucursal.tsx"; // Importar la grilla de sucursales
 import GrillaPedidos from './grillas/GrillaPedidos.tsx';
 import { useAuth } from "../../context/AuthContext.tsx"
 import { useSucursal } from "../../context/SucursalContextEmpleado.tsx";
-
 
 import {useLocation} from "react-router-dom";
 import {useNavigate} from "react-router-dom";
@@ -40,30 +39,32 @@ function PanelAdmin() {
     const location = useLocation();
     const navigate = useNavigate();
 
-
     const botones = [
-        { nombre: 'Dashboard', icono: Dashboard, path: 'dashboard', rolesPermitidos: ['ADMINISTRADOR'] },
-        { nombre: 'Pedidos', icono: Pedidos, path: 'pedidos', rolesPermitidos: ['ADMINISTRADOR', 'CAJERO'] },
-        { nombre: 'Cocina', icono: Cocina, path: 'cocina', rolesPermitidos: ['ADMINISTRADOR', 'COCINERO'] },
-        { nombre: 'Delivery', icono: Delivery, path: 'delivery', rolesPermitidos: ['ADMINISTRADOR', 'DELIVERY'] },
-        { nombre: 'Clientes', icono: Usuario, path: 'clientes', rolesPermitidos: ['ADMINISTRADOR'] },
-        { nombre: 'Productos', icono: Productos, path: 'productos', rolesPermitidos: ['ADMINISTRADOR'] },
-        { nombre: 'Insumos', icono: Insumos, path: 'insumos', rolesPermitidos: ['ADMINISTRADOR'] },
-        { nombre: 'Promociones', icono: Pedidos, path: 'promociones', rolesPermitidos: ['ADMINISTRADOR'] },
-        { nombre: 'Stock', icono: Stock, path: 'stock', rolesPermitidos: ['ADMINISTRADOR'] },
-        { nombre: 'Categorias', icono: Categorias, path: 'categorias', rolesPermitidos: ['ADMINISTRADOR'] },
-        { nombre: 'Empleados', icono: Usuario, path: 'empleados', rolesPermitidos: ['ADMINISTRADOR'] },
-        { nombre: 'Estadísticas', icono: Estadisticas, path: 'estadisticas', rolesPermitidos: ['ADMINISTRADOR'] },
-        
+        { nombre: 'Dashboard', icono: Dashboard, path: 'dashboard', rolesPermitidos: ['ADMINISTRADOR'], visible: true },
+        { nombre: 'Pedidos', icono: Pedidos, path: 'pedidos', rolesPermitidos: ['ADMINISTRADOR', 'CAJERO'], visible: true },
+        { nombre: 'Cocina', icono: Cocina, path: 'cocina', rolesPermitidos: ['ADMINISTRADOR', 'COCINERO'], visible: true },
+        { nombre: 'Delivery', icono: Delivery, path: 'delivery', rolesPermitidos: ['ADMINISTRADOR', 'DELIVERY'], visible: true },
+        { nombre: 'Clientes', icono: Usuario, path: 'clientes', rolesPermitidos: ['ADMINISTRADOR'], visible: true },
+        { nombre: 'Productos', icono: Productos, path: 'productos', rolesPermitidos: ['ADMINISTRADOR'], visible: true },
+        { nombre: 'Insumos', icono: Insumos, path: 'insumos', rolesPermitidos: ['ADMINISTRADOR'], visible: true },
+        { nombre: 'Promociones', icono: Pedidos, path: 'promociones', rolesPermitidos: ['ADMINISTRADOR'], visible: true },
+        { nombre: 'Stock', icono: Stock, path: 'stock', rolesPermitidos: ['ADMINISTRADOR'], visible: true },
+        { nombre: 'Categorias', icono: Categorias, path: 'categorias', rolesPermitidos: ['ADMINISTRADOR'], visible: true },
+        { nombre: 'Empleados', icono: Usuario, path: 'empleados', rolesPermitidos: ['ADMINISTRADOR'], visible: true },
+        { nombre: 'Estadísticas', icono: Estadisticas, path: 'estadisticas', rolesPermitidos: ['ADMINISTRADOR'], visible: true },
+        // Ruta oculta para sucursales - no aparece en el sidebar pero funciona la navegación
+        { nombre: 'Sucursales', icono: null, path: 'sucursal', rolesPermitidos: ['ADMINISTRADOR'], visible: false },
     ];
 
+    // Filtrar solo los botones visibles para el sidebar
     const botonesVisibles = botones.filter(btn =>
-        btn.rolesPermitidos.includes(usuario!.rol)
+        btn.rolesPermitidos.includes(usuario!.rol) && btn.visible
     );
 
     // Obtener la ruta activa desde la URL (ej: 'cocina')
     const rutaActual = location.pathname.split("/")[2] || "dashboard";
     const botonActual = botones.find(btn => btn.path === rutaActual);
+
     // Si el usuario no tiene permisos para la ruta actual, redirigilo al primero que sí tenga
     useEffect(() => {
         if (usuario && (!botonActual || !botonActual.rolesPermitidos.includes(usuario.rol))) {
@@ -73,12 +74,13 @@ function PanelAdmin() {
             }
         }
     }, [usuario, botonActual, navigate]);
+
     const renderContent = () => {
         if (!botonActual || !botonActual.rolesPermitidos.includes(usuario!.rol)) {
             return <div>No tenés permiso para ver esta sección.</div>;
         }
 
-        const requiereContextoSucursal = !['clientes', 'empleados'].includes(botonActual.path);
+        const requiereContextoSucursal = !['clientes', 'empleados', 'sucursal'].includes(botonActual.path);
 
         if (requiereContextoSucursal && !sucursalActual && !esModoTodasSucursales) {
             return (
@@ -87,13 +89,13 @@ function PanelAdmin() {
                 </div>
             );
         }
+
         const getTitulo = (nombreSeccion: string) => {
             if (esModoTodasSucursales) {
                 return `${nombreSeccion} - Todas las sucursales`;
             }
             return `${nombreSeccion} - ${sucursalActual?.nombre}`;
         };
-
 
         switch (botonActual.nombre) {
             case 'Dashboard':
@@ -103,7 +105,6 @@ function PanelAdmin() {
                         esModoTodasSucursales={esModoTodasSucursales}
                         sucursalIdSeleccionada={sucursalIdSeleccionada}
                     />
-
                 );
 
             case 'Productos':
@@ -166,13 +167,22 @@ function PanelAdmin() {
             case 'Stock':
                 return(
                     <div>
+                        <h2>{getTitulo('Stock')}</h2>
                         <GrillaStock/>
                     </div>
                 )
             case 'Promociones':
                 return(
                     <div>
+                        <h2>{getTitulo('Promociones')}</h2>
                         <GrillaPromocion/>
+                    </div>
+                )
+            // Nuevo caso para Sucursales
+            case 'Sucursales':
+                return(
+                    <div>
+                        <GrillaSucursal/>
                     </div>
                 )
             default:
@@ -225,7 +235,6 @@ function PanelAdmin() {
                 </Col>
             </Row>
         </Container>
-
     );
 }
 

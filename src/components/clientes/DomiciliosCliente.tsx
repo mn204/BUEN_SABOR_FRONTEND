@@ -1,6 +1,6 @@
 // DomiciliosCliente.tsx
 import { useState } from "react";
-import { Container, Row, Col, Button, Card } from "react-bootstrap";
+import { Container, Row, Col, Button, Card, Modal } from "react-bootstrap";
 import { FaPlus, FaEdit, FaTrash, FaMapMarkerAlt } from "react-icons/fa";
 import { useAuth } from "../../context/AuthContext";
 import Domicilio from "../../models/Domicilio";
@@ -14,6 +14,14 @@ const DomiciliosCliente = () => {
     const [modalVisible, setModalVisible] = useState(false);
     const [domicilioSeleccionado, setDomicilioSeleccionado] = useState<Domicilio | null>(null);
 
+    // Estados para modal de confirmación y resultado - NUEVOS
+    const [showModalConfirmacion, setShowModalConfirmacion] = useState(false);
+    const [showModalResultado, setShowModalResultado] = useState(false);
+    const [domicilioAEliminar, setDomicilioAEliminar] = useState<Domicilio | null>(null);
+    const [mensajeResultado, setMensajeResultado] = useState("");
+    const [tipoResultado, setTipoResultado] = useState<'success' | 'error'>('success');
+    const [procesando, setProcesando] = useState(false);
+
     const handleAgregar = () => {
         setDomicilioSeleccionado(null);
         setModalVisible(true);
@@ -24,31 +32,66 @@ const DomiciliosCliente = () => {
         setModalVisible(true);
     };
 
-    const handleEliminar = async (domicilio: Domicilio) => {
-        if (!cliente || !domicilio.id) return;
+    // Función para mostrar confirmación de eliminación - NUEVA
+    const mostrarConfirmacionEliminar = (domicilio: Domicilio) => {
+        setDomicilioAEliminar(domicilio);
+        setShowModalConfirmacion(true);
+    };
 
-        const confirmacion = window.confirm("¿Estás seguro que querés eliminar este domicilio?");
-        if (!confirmacion) return;
+    // Función para mostrar resultado - NUEVA
+    const mostrarResultado = (mensaje: string, tipo: 'success' | 'error') => {
+        setMensajeResultado(mensaje);
+        setTipoResultado(tipo);
+        setShowModalResultado(true);
+    };
+
+    // Función para ejecutar eliminación - ACTUALIZADA
+    const ejecutarEliminacion = async () => {
+        if (!cliente || !domicilioAEliminar?.id) return;
+
+        setProcesando(true);
+        setShowModalConfirmacion(false);
 
         try {
-            await eliminarDomiciliosCliente(cliente.id, domicilio.id);
+            await eliminarDomiciliosCliente(cliente.id, domicilioAEliminar.id);
 
             // Filtrar domicilio eliminado del estado actual del cliente
-            const nuevosDomicilios = cliente.domicilios?.filter(d => d.id !== domicilio.id) || [];
+            const nuevosDomicilios = cliente.domicilios?.filter(d => d.id !== domicilioAEliminar.id) || [];
 
             // Actualizar cliente sin el domicilio eliminado
             setCliente({
                 ...cliente,
                 domicilios: nuevosDomicilios
             });
+
+            mostrarResultado("Domicilio eliminado correctamente", 'success');
         } catch (error) {
             console.error("Error al eliminar domicilio:", error);
-            alert("Ocurrió un error al intentar eliminar el domicilio.");
+            mostrarResultado("Ocurrió un error al intentar eliminar el domicilio", 'error');
+        } finally {
+            setProcesando(false);
+            setDomicilioAEliminar(null);
         }
+    };
+
+    // Función para cancelar eliminación - NUEVA
+    const cancelarEliminacion = () => {
+        setShowModalConfirmacion(false);
+        setDomicilioAEliminar(null);
+    };
+
+    // Función handleEliminar actualizada - ACTUALIZADA
+    const handleEliminar = (domicilio: Domicilio) => {
+        mostrarConfirmacionEliminar(domicilio);
     };
 
     const handleModalSubmit = (clienteActualizado: any) => {
         setCliente(clienteActualizado);
+    };
+
+    // Función para obtener el nombre del domicilio - NUEVA
+    const getNombreDomicilio = (domicilio: Domicilio, index: number) => {
+        return domicilio.detalles || `Dirección ${index + 1}`;
     };
 
     return (
@@ -73,10 +116,10 @@ const DomiciliosCliente = () => {
                         {domicilios.length} {domicilios.length === 1 ? 'dirección registrada' : 'direcciones registradas'}
                     </span>
                 </div>
-                <Button 
-                    variant="primary" 
+                <Button
+                    variant="primary"
                     className="px-4 py-2 rounded-pill shadow-sm"
-                    style={{ 
+                    style={{
                         background: 'linear-gradient(135deg, #007bff 0%, #0056b3 100%)',
                         border: 'none',
                         transition: 'all 0.3s ease'
@@ -107,8 +150,8 @@ const DomiciliosCliente = () => {
                         <p className="text-muted mb-4">
                             Agregá tu primera dirección para facilitar tus pedidos
                         </p>
-                        <Button 
-                            variant="primary" 
+                        <Button
+                            variant="primary"
                             className="px-4 py-2 rounded-pill"
                             onClick={handleAgregar}
                         >
@@ -121,9 +164,9 @@ const DomiciliosCliente = () => {
                 <div className="row g-3">
                     {domicilios.map((domicilio, index) => (
                         <div key={domicilio.id} className="col-12">
-                            <Card 
+                            <Card
                                 className="shadow-sm h-100"
-                                style={{ 
+                                style={{
                                     transition: 'all 0.3s ease',
                                     borderRadius: '16px',
                                     background: 'linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%)'
@@ -140,7 +183,7 @@ const DomiciliosCliente = () => {
                                 <Card.Body className="p-4">
                                     <Row className="align-items-start">
                                         <Col xs={1} className="d-flex justify-content-center">
-                                            <div 
+                                            <div
                                                 className="bg-primary bg-opacity-10 rounded-circle d-flex align-items-center justify-content-center"
                                                 style={{ width: '40px', height: '40px' }}
                                             >
@@ -150,10 +193,10 @@ const DomiciliosCliente = () => {
                                         <Col xs={12} md={8} className="ps-3">
                                             <div className="mb-2">
                                                 <h6 className="fw-bold text-dark mb-1" style={{ fontSize: '1.1rem' }}>
-                                                    {domicilio.detalles || `Dirección ${index + 1}`}
+                                                    {getNombreDomicilio(domicilio, index)}
                                                 </h6>
                                                 <div className="d-flex align-items-center">
-                                                    <span 
+                                                    <span
                                                         className="badge bg-light text-dark px-2 py-1 rounded-pill me-2"
                                                         style={{ fontSize: '0.75rem', fontWeight: '500' }}
                                                     >
@@ -184,7 +227,7 @@ const DomiciliosCliente = () => {
                                                     variant="outline-primary"
                                                     size="sm"
                                                     className="rounded-pill px-3"
-                                                    style={{ 
+                                                    style={{
                                                         transition: 'all 0.3s ease',
                                                         borderWidth: '1.5px'
                                                     }}
@@ -207,7 +250,7 @@ const DomiciliosCliente = () => {
                                                     variant="outline-danger"
                                                     size="sm"
                                                     className="rounded-pill px-3"
-                                                    style={{ 
+                                                    style={{
                                                         transition: 'all 0.3s ease',
                                                         borderWidth: '1.5px'
                                                     }}
@@ -246,6 +289,103 @@ const DomiciliosCliente = () => {
                     cliente={cliente}
                 />
             )}
+
+            {/* Modal de Confirmación para Eliminación - NUEVO */}
+            <Modal
+                show={showModalConfirmacion}
+                onHide={cancelarEliminacion}
+                centered
+                backdrop="static"
+            >
+                <Modal.Header closeButton>
+                    <Modal.Title>Confirmar Eliminación</Modal.Title>
+                </Modal.Header>
+                <Modal.Body>
+                    <div className="text-center">
+                        <div className="mb-3 text-danger">
+                            <FaTrash size={48} />
+                        </div>
+                        <h5>¿Estás seguro que querés eliminar este domicilio?</h5>
+                        {domicilioAEliminar && (
+                            <div className="mt-3 p-3 bg-light rounded">
+                                <p className="text-muted mb-1">
+                                    <strong>{getNombreDomicilio(domicilioAEliminar, 0)}</strong>
+                                </p>
+                                <p className="small text-muted mb-0">
+                                    {domicilioAEliminar.calle} {domicilioAEliminar.numero}
+                                    {domicilioAEliminar.piso && `, Piso ${domicilioAEliminar.piso}`}
+                                    {domicilioAEliminar.nroDepartamento && `, Dpto. ${domicilioAEliminar.nroDepartamento}`}
+                                </p>
+                                <p className="small text-muted mb-0">
+                                    CP {domicilioAEliminar.codigoPostal} • {domicilioAEliminar.localidad?.nombre}
+                                </p>
+                            </div>
+                        )}
+                        <p className="small text-muted mt-3">
+                            Esta acción no se puede deshacer.
+                        </p>
+                    </div>
+                </Modal.Body>
+                <Modal.Footer>
+                    <Button variant="secondary" onClick={cancelarEliminacion} disabled={procesando}>
+                        Cancelar
+                    </Button>
+                    <Button
+                        variant="danger"
+                        onClick={ejecutarEliminacion}
+                        disabled={procesando}
+                    >
+                        {procesando ? (
+                            <>
+                                <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                                Eliminando...
+                            </>
+                        ) : (
+                            <>
+                                <FaTrash className="me-2" />
+                                Eliminar Domicilio
+                            </>
+                        )}
+                    </Button>
+                </Modal.Footer>
+            </Modal>
+
+            {/* Modal de Resultado - NUEVO */}
+            <Modal
+                show={showModalResultado}
+                onHide={() => setShowModalResultado(false)}
+                centered
+            >
+                <Modal.Header closeButton>
+                    <Modal.Title>
+                        {tipoResultado === 'success' ? 'Operación Exitosa' : 'Error'}
+                    </Modal.Title>
+                </Modal.Header>
+                <Modal.Body>
+                    <div className="text-center">
+                        <div className={`mb-3 ${tipoResultado === 'success' ? 'text-success' : 'text-danger'}`}>
+                            {tipoResultado === 'success' ? (
+                                <div className="d-inline-flex align-items-center justify-content-center bg-success bg-opacity-10 rounded-circle p-3">
+                                    <i className="bi bi-check-circle-fill" style={{ fontSize: '2rem' }}></i>
+                                </div>
+                            ) : (
+                                <div className="d-inline-flex align-items-center justify-content-center bg-danger bg-opacity-10 rounded-circle p-3">
+                                    <i className="bi bi-x-circle-fill" style={{ fontSize: '2rem' }}></i>
+                                </div>
+                            )}
+                        </div>
+                        <h5>{mensajeResultado}</h5>
+                    </div>
+                </Modal.Body>
+                <Modal.Footer>
+                    <Button
+                        variant={tipoResultado === 'success' ? 'success' : 'danger'}
+                        onClick={() => setShowModalResultado(false)}
+                    >
+                        Aceptar
+                    </Button>
+                </Modal.Footer>
+            </Modal>
         </Container>
     );
 };

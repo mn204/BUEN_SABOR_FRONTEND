@@ -7,18 +7,16 @@ import {
     getEmpleadosFiltrados // <-- Nuevo import
 } from "../../../services/EmpleadoService.ts";
 import { ReusableTable } from "../../Tabla";
-import BotonVer from "../../layout/BotonVer.tsx";
-import BotonEliminar from "../../layout/BotonEliminar.tsx";
-import BotonAlta from "../../layout/BotonAlta.tsx";
+import BotonVer from "../../layout/botones/BotonVer.tsx";
+import BotonEliminar from "../../layout/botones/BotonEliminar.tsx";
+import BotonAlta from "../../layout/botones/BotonAlta.tsx";
 import { Modal , Form, Button} from "react-bootstrap";
-import { darDeAltaUsuario, eliminarUsuario } from "../../../services/UsuarioService.ts";
-import BotonModificar from "../../layout/BotonModificar.tsx";
+import BotonModificar from "../../layout/botones/BotonModificar.tsx";
 import { useNavigate } from "react-router-dom";
 import Sucursal from "../../../models/Sucursal.ts";
 import { obtenerSucursales } from "../../../services/SucursalService.ts";
 import FormDatosEmpleado from "../formularios/FormDatosEmpleado.tsx";
 import { ChevronLeft, ChevronRight } from "react-bootstrap-icons";
-import Cliente from "../../../models/Cliente.ts";
 
 const GrillaEmpleado = () => {
     const [empleados, setEmpleados] = useState<Empleado[]>([]);
@@ -39,6 +37,18 @@ const GrillaEmpleado = () => {
     const [showModal, setShowModal] = useState(false);
     const [showEditar, setShowEditar] = useState(false);
     const [sucursales, setSucursales] = useState<Sucursal[]>([]);
+
+    // Estados para modal de confirmación y resultado
+    const [showModalConfirmacion, setShowModalConfirmacion] = useState(false);
+    const [showModalResultado, setShowModalResultado] = useState(false);
+    const [accionPendiente, setAccionPendiente] = useState<{
+        tipo: 'eliminar' | 'alta';
+        empleadoId: number;
+        empleadoNombre: string;
+    } | null>(null);
+    const [mensajeResultado, setMensajeResultado] = useState("");
+    const [tipoResultado, setTipoResultado] = useState<'success' | 'error'>('success');
+    const [procesando, setProcesando] = useState(false);
 
     useEffect(() => {
         cargarSucursales();
@@ -107,11 +117,12 @@ const GrillaEmpleado = () => {
             setTotalPages(result.totalPages);
         } catch (error) {
             console.error("Error al cargar empleados:", error);
-            alert("Error al cargar empleados");
+            mostrarResultado("Error al cargar empleados", 'error');
         } finally {
             setLoading(false);
         }
     };
+
     const handleCloseModal = () => {
         setShowModal(false);
         setEmpleadoSeleccionado(null);
@@ -123,32 +134,64 @@ const GrillaEmpleado = () => {
             setEmpleadoSeleccionado(data);
             setShowModal(true);
         } catch (err) {
-            alert("Error al obtener los datos del empleado");
+            mostrarResultado("Error al obtener los datos del empleado", 'error');
         }
     };
 
-    const handleEliminar = async (id: number, idUsuario: number) => {
-        if (!window.confirm("¿Seguro que desea eliminar este empleado?")) return;
+    // Nuevas funciones para manejo de modales
+    const mostrarConfirmacion = (tipo: 'eliminar' | 'alta', empleadoId: number, empleadoNombre: string) => {
+        setAccionPendiente({
+            tipo,
+            empleadoId,
+            empleadoNombre
+        });
+        setShowModalConfirmacion(true);
+    };
+
+    const mostrarResultado = (mensaje: string, tipo: 'success' | 'error') => {
+        setMensajeResultado(mensaje);
+        setTipoResultado(tipo);
+        setShowModalResultado(true);
+    };
+
+    const ejecutarAccion = async () => {
+        if (!accionPendiente) return;
+
+        setProcesando(true);
+        setShowModalConfirmacion(false);
+
         try {
-            await eliminarEmpleado(id);
-            await eliminarUsuario(idUsuario);
+            if (accionPendiente.tipo === 'eliminar') {
+                await eliminarEmpleado(accionPendiente.empleadoId);
+                mostrarResultado("Empleado eliminado correctamente", 'success');
+            } else {
+                await darDeAltaEmpleado(accionPendiente.empleadoId);
+                mostrarResultado("Empleado dado de alta correctamente", 'success');
+            }
+            
             await cargarEmpleados();
-            alert("Empleado eliminado correctamente");
         } catch (error) {
-            alert("Error al eliminar el empleado");
+            const mensaje = accionPendiente.tipo === 'eliminar' 
+                ? "Error al eliminar el empleado" 
+                : "Error al dar de alta el empleado";
+            mostrarResultado(mensaje, 'error');
+        } finally {
+            setProcesando(false);
+            setAccionPendiente(null);
         }
     };
 
-    const handleAlta = async (id: number, idUsuario: number) => {
-        if (!window.confirm("¿Desea dar de alta este empleado?")) return;
-        try {
-            await darDeAltaEmpleado(id);
-            await darDeAltaUsuario(idUsuario);
-            await cargarEmpleados();
-            alert("Empleado dado de alta correctamente");
-        } catch (error) {
-            alert("Error al dar de alta el empleado");
-        }
+    const cancelarAccion = () => {
+        setShowModalConfirmacion(false);
+        setAccionPendiente(null);
+    };
+
+    const handleEliminar = (empleado: Empleado) => {
+        mostrarConfirmacion('eliminar', empleado.id!, `${empleado.nombre} ${empleado.apellido}`);
+    };
+
+    const handleAlta = (empleado: Empleado) => {
+        mostrarConfirmacion('alta', empleado.id!, `${empleado.nombre} ${empleado.apellido}`);
     };
 
     // Resetear página cuando cambien los filtros
@@ -161,7 +204,7 @@ const GrillaEmpleado = () => {
         {
             key: "imagen",
             label: "Imagen",
-            render: (_: any, row: Emplado) =>
+            render: (_: any, row: Empleado) =>
                 row.usuario.photoUrl ? (
                     <img
                         src={row.usuario.photoUrl}
@@ -220,9 +263,9 @@ const GrillaEmpleado = () => {
                     }} />
 
                     {!row.eliminado ? (
-                        <BotonEliminar onClick={() => handleEliminar(row.id!, row.usuario.id)} />
+                        <BotonEliminar onClick={() => handleEliminar(row)} />
                     ) : (
-                        <BotonAlta onClick={() => handleAlta(row.id!, row.usuario.id)} />
+                        <BotonAlta onClick={() => handleAlta(row)} />
                     )}
                 </div>
             ),
@@ -345,7 +388,7 @@ const GrillaEmpleado = () => {
                             <div className="mb-3">
                                 <p><b>Nombre:</b> {empleadoSeleccionado.nombre}</p>
                                 <p><b>Apellido:</b> {empleadoSeleccionado.apellido}</p>
-                                <p><b>DNI:</b> {empleadoSeleccionado.usuario.dni}</p>
+                                <p><b>DNI:</b> {empleadoSeleccionado.dni}</p>
                                 <p><b>Teléfono:</b> {empleadoSeleccionado.telefono}</p>
                                 <p><b>Email:</b> {empleadoSeleccionado.usuario.email}</p>
                                 <p><b>Rol:</b> {empleadoSeleccionado.usuario.rol}</p>
@@ -382,6 +425,90 @@ const GrillaEmpleado = () => {
                     }}
                 />
             )}
+
+            {/* Modal de Confirmación */}
+            <Modal 
+                show={showModalConfirmacion} 
+                onHide={cancelarAccion} 
+                centered
+                backdrop="static"
+            >
+                <Modal.Header closeButton>
+                    <Modal.Title>
+                        {accionPendiente?.tipo === 'eliminar' ? 'Confirmar Eliminación' : 'Confirmar Alta'}
+                    </Modal.Title>
+                </Modal.Header>
+                <Modal.Body>
+                    <div className="text-center">
+                        <div className={`mb-3 ${accionPendiente?.tipo === 'eliminar' ? 'text-danger' : 'text-success'}`}>
+                            <i className={`bi ${accionPendiente?.tipo === 'eliminar' ? 'bi-exclamation-triangle' : 'bi-check-circle'} display-1`}></i>
+                        </div>
+                        <h5>
+                            {accionPendiente?.tipo === 'eliminar' 
+                                ? '¿Está seguro que desea eliminar este empleado?' 
+                                : '¿Está seguro que desea dar de alta este empleado?'
+                            }
+                        </h5>
+                        <p className="text-muted">
+                            <strong>{accionPendiente?.empleadoNombre}</strong>
+                        </p>
+                        <p className="small text-muted">
+                            {accionPendiente?.tipo === 'eliminar' 
+                                ? 'Esta acción cambiará el estado del empleado a inactivo.' 
+                                : 'Esta acción cambiará el estado del empleado a activo.'
+                            }
+                        </p>
+                    </div>
+                </Modal.Body>
+                <Modal.Footer>
+                    <Button variant="secondary" onClick={cancelarAccion} disabled={procesando}>
+                        Cancelar
+                    </Button>
+                    <Button 
+                        variant={accionPendiente?.tipo === 'eliminar' ? 'danger' : 'success'} 
+                        onClick={ejecutarAccion}
+                        disabled={procesando}
+                    >
+                        {procesando ? (
+                            <>
+                                <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                                Procesando...
+                            </>
+                        ) : (
+                            accionPendiente?.tipo === 'eliminar' ? 'Eliminar' : 'Dar de Alta'
+                        )}
+                    </Button>
+                </Modal.Footer>
+            </Modal>
+
+            {/* Modal de Resultado */}
+            <Modal 
+                show={showModalResultado} 
+                onHide={() => setShowModalResultado(false)} 
+                centered
+            >
+                <Modal.Header closeButton>
+                    <Modal.Title>
+                        {tipoResultado === 'success' ? 'Operación Exitosa' : 'Error'}
+                    </Modal.Title>
+                </Modal.Header>
+                <Modal.Body>
+                    <div className="text-center">
+                        <div className={`mb-3 ${tipoResultado === 'success' ? 'text-success' : 'text-danger'}`}>
+                            <i className={`bi ${tipoResultado === 'success' ? 'bi-check-circle-fill' : 'bi-x-circle-fill'} display-1`}></i>
+                        </div>
+                        <h5>{mensajeResultado}</h5>
+                    </div>
+                </Modal.Body>
+                <Modal.Footer>
+                    <Button 
+                        variant={tipoResultado === 'success' ? 'success' : 'danger'} 
+                        onClick={() => setShowModalResultado(false)}
+                    >
+                        Aceptar
+                    </Button>
+                </Modal.Footer>
+            </Modal>
         </div>
     );
 };

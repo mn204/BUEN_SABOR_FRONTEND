@@ -10,11 +10,15 @@ import ArticuloInsumoService from "../../../services/ArticuloInsumoService";
 import SucursalInsumoService from "../../../services/SucursalInsumoService";
 import { useSucursal } from "../../../context/SucursalContextEmpleado";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import type Sucursal from "../../../models/Sucursal";
+import SucursalService from "../../../services/SucursalService";
 
 function FormStock() {
   const [searchParams] = useSearchParams();
   const idFromUrl = searchParams.get("id");
-  const { sucursalActual } = useSucursal();
+  const { sucursalActual, esModoTodasSucursales } = useSucursal();
+  const [sucursales, setSucursales] = useState<Sucursal[]>([]);
+  const [sucursalesSeleccionadas, setSucursalesSeleccionadas] = useState<number[]>([]);
   const navigate = useNavigate();
 
   // Estados para datos
@@ -43,22 +47,26 @@ function FormStock() {
       setError(null);
 
       try {
-        // Cargar todos los insumos
+        // Cargar todos los insumos y sucursales
         const insumosData = await ArticuloInsumoService.getAll();
+        const sucursalesData = await SucursalService.getAll();
         setInsumos(insumosData);
+        setSucursales(sucursalesData);
 
         // Si es modo edición, cargar datos del SucursalInsumo
         if (isEditMode && idFromUrl) {
           try {
             const sucursalInsumoData = await SucursalInsumoService.getById(Number(idFromUrl));
             setSucursalInsumo(sucursalInsumoData);
-            console.log(sucursalInsumoData)
 
             // Setear valores del formulario
-            setSelectedId(sucursalInsumoData.articuloInsumo.id);
+            setSelectedId(sucursalInsumoData.articuloInsumo.id!);
             setStockMinimo(sucursalInsumoData.stockMinimo);
             setStockMaximo(sucursalInsumoData.stockMaximo);
             setStockActual(sucursalInsumoData.stockActual);
+
+            // En modo edición, seleccionar solo la sucursal actual
+            setSucursalesSeleccionadas([sucursalInsumoData.sucursal.id!]);
 
             // En modo edición, mostrar todos los insumos (incluyendo el actual)
             setInsumosDisponibles(insumosData);
@@ -67,37 +75,17 @@ function FormStock() {
             console.error("Error al cargar SucursalInsumo:", editError);
           }
         } else {
-          // Modo creación: filtrar insumos que ya tienen stock en la sucursal actual
-          if (sucursalActual) {
-            try {
-              // Obtener todos los stocks de la sucursal actual
-              const stocksExistentes = await SucursalInsumoService.getBySucursal(sucursalActual!.id!);
-              
-              // Obtener los IDs de los insumos que ya tienen stock
-              const insumosConStock = stocksExistentes
-                .filter(stock => !stock.eliminado) // Solo considerar stocks no eliminados
-                .map(stock => stock.articuloInsumo.id);
-              console.log(stocksExistentes)
-              // Filtrar insumos disponibles (excluir los que ya tienen stock)
-              const insumosDisponiblesData = insumosData.filter(
-                insumo => !insumosConStock.includes(insumo.id)
-              );
-
-              setInsumosDisponibles(insumosDisponiblesData);
-
-              // Si no hay insumos disponibles, mostrar mensaje informativo
-              if (insumosDisponiblesData.length === 0) {
-                setError("Todos los insumos ya tienen stock configurado en esta sucursal");
-              }
-            } catch (stockError) {
-              console.error("Error al obtener stocks existentes:", stockError);
-              // En caso de error, mostrar todos los insumos
-              setInsumosDisponibles(insumosData);
-            }
-          } else {
-            // Si no hay sucursal seleccionada, mostrar todos los insumos
-            setInsumosDisponibles(insumosData);
+          // Modo creación: configurar sucursales seleccionadas
+          if (esModoTodasSucursales) {
+            // Si está en modo todas las sucursales, no seleccionar ninguna por defecto
+            setSucursalesSeleccionadas([]);
+          } else if (sucursalActual) {
+            // Si hay una sucursal específica, seleccionarla por defecto
+            setSucursalesSeleccionadas([sucursalActual.id!]);
           }
+
+          // Filtrar insumos disponibles
+          await filtrarInsumosDisponibles(insumosData, sucursalesData);
         }
       } catch (err) {
         setError("Error al cargar los datos necesarios");
@@ -108,7 +96,83 @@ function FormStock() {
     };
 
     fetchData();
-  }, [idFromUrl, isEditMode, sucursalActual]);
+  }, [idFromUrl, isEditMode, sucursalActual, esModoTodasSucursales]);
+
+  const filtrarInsumosDisponibles = async (insumosData: ArticuloInsumo[], sucursalesData: Sucursal[]) => {
+    if (esModoTodasSucursales) {
+      // En modo todas las sucursales, mostrar todos los insumos inicialmente
+      setInsumosDisponibles(insumosData);
+    } else if (sucursalActual) {
+      // Modo sucursal específica: filtrar insumos que ya tienen stock
+      try {
+        const stocksExistentes = await SucursalInsumoService.getBySucursal(sucursalActual.id!);
+        const insumosConStock = stocksExistentes
+          .filter(stock => !stock.eliminado)
+          .map(stock => stock.articuloInsumo.id);
+
+        const insumosDisponiblesData = insumosData.filter(
+          insumo => !insumosConStock.includes(insumo.id)
+        );
+
+        setInsumosDisponibles(insumosDisponiblesData);
+
+        if (insumosDisponiblesData.length === 0) {
+          setError("Todos los insumos ya tienen stock configurado en esta sucursal");
+        }
+      } catch (stockError) {
+        console.error("Error al obtener stocks existentes:", stockError);
+        setInsumosDisponibles(insumosData);
+      }
+    } else {
+      setInsumosDisponibles(insumosData);
+    }
+  };
+
+  // Actualizar insumos disponibles cuando cambien las sucursales seleccionadas
+  useEffect(() => {
+    if (!isEditMode && esModoTodasSucursales && sucursalesSeleccionadas.length > 0) {
+      const actualizarInsumosDisponibles = async () => {
+        try {
+          const insumosConStockPromises = sucursalesSeleccionadas.map(async (sucursalId) => {
+            const stocksExistentes = await SucursalInsumoService.getBySucursal(sucursalId);
+            return stocksExistentes
+              .filter(stock => !stock.eliminado)
+              .map(stock => stock.articuloInsumo.id);
+          });
+
+          const insumosConStockArrays = await Promise.all(insumosConStockPromises);
+          const todosLosInsumosConStock = [...new Set(insumosConStockArrays.flat())];
+
+          const insumosDisponiblesData = insumos.filter(
+            insumo => !todosLosInsumosConStock.includes(insumo.id)
+          );
+
+          setInsumosDisponibles(insumosDisponiblesData);
+        } catch (error) {
+          console.error("Error al filtrar insumos:", error);
+          setInsumosDisponibles(insumos);
+        }
+      };
+
+      actualizarInsumosDisponibles();
+    }
+  }, [sucursalesSeleccionadas, insumos, isEditMode, esModoTodasSucursales]);
+
+  const handleSucursalChange = (sucursalId: number, checked: boolean) => {
+    if (checked) {
+      setSucursalesSeleccionadas(prev => [...prev, sucursalId]);
+    } else {
+      setSucursalesSeleccionadas(prev => prev.filter(id => id !== sucursalId));
+    }
+  };
+
+  const handleSelectAllSucursales = (selectAll: boolean) => {
+    if (selectAll) {
+      setSucursalesSeleccionadas(sucursales.map(s => s.id!));
+    } else {
+      setSucursalesSeleccionadas([]);
+    }
+  };
 
   const validateForm = (): string | null => {
     if (!selectedId) {
@@ -124,9 +188,15 @@ function FormStock() {
       return "El stock actual no puede ser negativo";
     }
     if (stockMaximo < stockMinimo) {
-      return "El stock máximo debe ser mayor o igual al stock mínimo";
+      return "El stock máximo debe ser mayor al stock mínimo";
     }
-    if (!sucursalActual) {
+    if (stockMaximo == stockMinimo) {
+      return "El stock máximo no puede ser igual al stock mínimo";
+    }
+    if (esModoTodasSucursales && sucursalesSeleccionadas.length === 0) {
+      return "Debe seleccionar al menos una sucursal";
+    }
+    if (!esModoTodasSucursales && !sucursalActual) {
       return "No se ha seleccionado una sucursal";
     }
     return null;
@@ -147,7 +217,7 @@ function FormStock() {
     }
 
     const insumoSeleccionado = insumos.find(i => i.id === selectedId);
-    if (!insumoSeleccionado || !sucursalActual) {
+    if (!insumoSeleccionado) {
       setError("Error en la selección de datos");
       return;
     }
@@ -155,37 +225,66 @@ function FormStock() {
     setLoadingForm(true);
 
     try {
-      const sucursalInsumoData: SucursalInsumo = {
-        ...(isEditMode && sucursalInsumo ? { id: sucursalInsumo.id } : {}),
-        stockMinimo,
-        stockMaximo,
-        stockActual,
-        eliminado: false,
-        articuloInsumo: insumoSeleccionado,
-        sucursal: sucursalActual
-      };
-
       if (isEditMode) {
-        // Actualizar
+        // Modo edición: actualizar un solo SucursalInsumo
+        const sucursalParaActualizar = sucursales.find(s => s.id === sucursalesSeleccionadas[0]);
+        if (!sucursalParaActualizar) {
+          setError("Error al encontrar la sucursal");
+          return;
+        }
+
+        const sucursalInsumoData: SucursalInsumo = {
+          id: sucursalInsumo!.id,
+          stockMinimo,
+          stockMaximo,
+          stockActual,
+          eliminado: false,
+          articuloInsumo: insumoSeleccionado,
+          sucursal: sucursalParaActualizar
+        };
+
         await SucursalInsumoService.update(sucursalInsumoData, Number(idFromUrl));
         setSuccess("Stock actualizado correctamente");
       } else {
-        // Crear
-        await SucursalInsumoService.create(sucursalInsumoData);
-        setSuccess("Stock creado correctamente");
+        // Modo creación: crear SucursalInsumo para cada sucursal seleccionada
+        const sucursalesParaCrear = esModoTodasSucursales 
+          ? sucursales.filter(s => sucursalesSeleccionadas.includes(s.id!))
+          : [sucursalActual!];
+
+        const promesasCreacion = sucursalesParaCrear.map(async (sucursal) => {
+          const sucursalInsumoData: SucursalInsumo = {
+            stockMinimo,
+            stockMaximo,
+            stockActual,
+            eliminado: false,
+            articuloInsumo: insumoSeleccionado,
+            sucursal: sucursal
+          };
+
+          return SucursalInsumoService.create(sucursalInsumoData);
+        });
+
+        await Promise.all(promesasCreacion);
+        
+        const mensaje = esModoTodasSucursales 
+          ? `Stock creado correctamente en ${sucursalesParaCrear.length} sucursal(es)`
+          : "Stock creado correctamente";
+        
+        setSuccess(mensaje);
 
         // Limpiar formulario después de crear
         setSelectedId(null);
         setStockMinimo(0);
         setStockMaximo(0);
         setStockActual(0);
+        setSucursalesSeleccionadas(esModoTodasSucursales ? [] : [sucursalActual?.id!]);
         navigate(-1);
       }
 
       // Opcional: redirigir después de un tiempo
       setTimeout(() => {
         if (isEditMode) {
-          navigate(-1); // Volver a la página anterior
+          navigate(-1);
         }
       }, 2000);
 
@@ -244,7 +343,7 @@ function FormStock() {
       </button>
       <div className="container">
         <div className="row justify-content-center">
-          <div className="col-md-6 col-lg-5">
+          <div className="col-md-8 col-lg-7">
             <Card className="shadow-sm">
               <Card.Header className="bg-primary text-white">
                 <h4 className="mb-0 d-flex align-items-center">
@@ -286,19 +385,54 @@ function FormStock() {
                   </Alert>
                 )}
 
-                {/* Mostrar mensaje informativo si no hay insumos disponibles en modo creación */}
-                {!isEditMode && insumosDisponibles.length === 0 && !error && (
-                  <Alert variant="info" className="mb-3">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="me-2">
-                      <circle cx="12" cy="12" r="10"></circle>
-                      <line x1="12" y1="8" x2="12" y2="12"></line>
-                      <line x1="12" y1="16" x2="12.01" y2="16"></line>
-                    </svg>
-                    No hay insumos disponibles para crear stock. Todos los insumos ya tienen stock configurado en esta sucursal.
-                  </Alert>
-                )}
-
                 <Form onSubmit={handleSubmit}>
+                  {/* Selección de sucursales - Solo en modo creación y cuando está en modo todas las sucursales */}
+                  {!isEditMode && esModoTodasSucursales && (
+                    <Form.Group className="mb-4" controlId="sucursalesSelect">
+                      <Form.Label className="fw-semibold">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="me-2">
+                          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                          <polyline points="9,22 9,12 15,12 15,22"></polyline>
+                        </svg>
+                        Sucursales donde crear el stock *
+                      </Form.Label>
+                      <div className="border p-3 rounded" style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                        <div className="mb-2">
+                          <Form.Check
+                            type="checkbox"
+                            id="selectAllSucursales"
+                            label="Seleccionar todas"
+                            checked={sucursalesSeleccionadas.length === sucursales.length && sucursales.length > 0}
+                            onChange={(e) => handleSelectAllSucursales(e.target.checked)}
+                            className="fw-bold"
+                          />
+                        </div>
+                        <hr className="my-2" />
+                        {sucursales.map(sucursal => (
+                          <div key={sucursal.id} className="mb-1">
+                            <Form.Check
+                              type="checkbox"
+                              id={`sucursal-${sucursal.id}`}
+                              label={sucursal.nombre}
+                              checked={sucursalesSeleccionadas.includes(sucursal.id!)}
+                              onChange={(e) => handleSucursalChange(sucursal.id!, e.target.checked)}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                      {sucursalesSeleccionadas.length === 0 && (
+                        <Form.Text className="text-danger">
+                          Debe seleccionar al menos una sucursal
+                        </Form.Text>
+                      )}
+                      {sucursalesSeleccionadas.length > 0 && (
+                        <Form.Text className="text-success">
+                          {sucursalesSeleccionadas.length} sucursal(es) seleccionada(s)
+                        </Form.Text>
+                      )}
+                    </Form.Group>
+                  )}
+
                   <Form.Group className="mb-3" controlId="insumoSelect">
                     <Form.Label className="fw-semibold">
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="me-2">
@@ -332,7 +466,10 @@ function FormStock() {
                     )}
                     {!isEditMode && insumosDisponibles.length === 0 && (
                       <Form.Text className="text-warning">
-                        Todos los insumos ya tienen stock en esta sucursal
+                        {esModoTodasSucursales 
+                          ? "Seleccione sucursales para ver insumos disponibles"
+                          : "Todos los insumos ya tienen stock en esta sucursal"
+                        }
                       </Form.Text>
                     )}
                   </Form.Group>
@@ -411,7 +548,12 @@ function FormStock() {
                     <Button
                       variant="primary"
                       type="submit"
-                      disabled={loadingForm || !sucursalActual || (insumosDisponibles.length === 0 && !isEditMode)}
+                      disabled={
+                        loadingForm || 
+                        (esModoTodasSucursales ? sucursalesSeleccionadas.length === 0 : !sucursalActual) ||
+                        (insumosDisponibles.length === 0 && !isEditMode) || 
+                        stockMinimo == stockMaximo
+                      }
                       className="d-flex align-items-center"
                     >
                       {loadingForm ? (
@@ -439,11 +581,27 @@ function FormStock() {
             <Card className="mt-3 bg-light">
               <Card.Body className="py-2">
                 <small className="text-muted">
-                  <strong>Sucursal actual:</strong> {sucursalActual?.nombre || 'No seleccionada'}
-                  {!isEditMode && (
+                  {esModoTodasSucursales ? (
                     <>
+                      <strong>Modo:</strong> Todas las sucursales
                       <br />
-                      <strong>Insumos disponibles:</strong> {insumosDisponibles.length} de {insumos.length}
+                      <strong>Sucursales seleccionadas:</strong> {sucursalesSeleccionadas.length} de {sucursales.length}
+                      {!isEditMode && (
+                        <>
+                          <br />
+                          <strong>Insumos disponibles:</strong> {insumosDisponibles.length} de {insumos.length}
+                        </>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <strong>Sucursal actual:</strong> {sucursalActual?.nombre || 'No seleccionada'}
+                      {!isEditMode && (
+                        <>
+                          <br />
+                          <strong>Insumos disponibles:</strong> {insumosDisponibles.length} de {insumos.length}
+                        </>
+                      )}
                     </>
                   )}
                 </small>

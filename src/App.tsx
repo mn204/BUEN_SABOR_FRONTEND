@@ -7,7 +7,6 @@ import Home from './components/layout/Home'
 import Perfil from './components/auth/Perfil'
 import FormArticuloManufacturado from './components/empleados/formularios/FormArticuloManufacturado.tsx'
 import RegisterEmpleado from "./components/auth/RegisterEmpleado.tsx";
-import { Carrito } from './components/articulos/Carrito.tsx'
 import Busqueda from './components/articulos/Busqueda.tsx'
 import VistaArticulo from './components/articulos/VistaArticulo.tsx'
 import FormInsumos from './components/empleados/formularios/FormInsumos.tsx'
@@ -30,7 +29,9 @@ import PedidoConfirmado from './components/articulos/PedidoConfirmado.tsx';
 import PromocionDetalle from './components/articulos/PromocionDetalle.tsx';
 import BusquedaCategoria from './components/articulos/BusquedaCategoria.tsx';
 import CarritoProtegido from './context/CarritoProtected.tsx';
-
+import QuienesSomos from './components/layout/QuienesSomos.tsx';
+import NuestraCompania from "./components/layout/NuestraCompañia.tsx";
+import TerminosYCondiciones from "./components/layout/TerminosYCondiciones.tsx";
 
 function AppContent() {
   const { requiresGoogleRegistration, completeGoogleRegistration, isAuthenticated, usuario } = useAuth();
@@ -51,6 +52,10 @@ function AppContent() {
         <Route path="/articulo/:id" element={<VistaArticulo />} />
         <Route path="/promocion/:id" element={<PromocionDetalle />} />
         <Route path="/categoria/:id" element={<BusquedaCategoria />} />
+
+        <Route path="/quienes-somos" element={<QuienesSomos />} />
+        <Route path="/nuestra-compania" element={<NuestraCompania />} />
+        <Route path="/terminos-y-condiciones" element={<TerminosYCondiciones />} />
 
         {/* Rutas para clientes autenticados */}
         <Route path="/perfil" element={
@@ -133,6 +138,14 @@ function AppContent() {
             <RegisterEmpleado />
           </ProtectedRoute>
         } />
+
+        <Route path="/empleado/sucursal" element={
+          <ProtectedRoute requiredRoles={[Rol.ADMIN]}>
+            <PanelAdmin />
+          </ProtectedRoute>
+        } />
+
+
       </Routes>
       {(!isAuthenticated || usuario?.rol === "CLIENTE") && (
         <Footer />)}

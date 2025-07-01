@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import Sucursal from '../models/Sucursal';
 import { obtenerSucursales } from '../services/SucursalService';
+import SucursalService from "../services/SucursalService";
 
 interface SucursalContextType {
     sucursalActualUsuario: Sucursal | null;
@@ -58,7 +59,7 @@ export const SucursalProviderUsuario: React.FC<SucursalProviderProps> = ({ child
 
     const cargarSucursales = async () => {
         try {
-            const sucursalesData = await obtenerSucursales();
+            const sucursalesData = await SucursalService.getAllNoEliminadas();
             setSucursales(sucursalesData);
         } catch (error) {
             console.error('Error al cargar sucursales:', error);
@@ -71,7 +72,7 @@ export const SucursalProviderUsuario: React.FC<SucursalProviderProps> = ({ child
             try {
                 // Para administradores: cargar todas las sucursales y establecer por defecto la sucursal 1
                 await cargarSucursales();
-                const sucursalesData = await obtenerSucursales();
+                const sucursalesData = await SucursalService.getAllNoEliminadas();
                 const storedSucursal = localStorage.getItem('sucursalActualUsuario');
                 if (storedSucursal) {
                     const sucursalGuardada: Sucursal = JSON.parse(storedSucursal);

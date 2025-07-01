@@ -3,15 +3,14 @@ import ArticuloManufacturadoService from "../../../services/ArticuloManufacturad
 import ArticuloManufacturado from "../../../models/ArticuloManufacturado.ts";
 import CategoriaService from "../../../services/CategoriaService.ts";
 import Categoria from "../../../models/Categoria.ts";
-import Button from "react-bootstrap/Button";
-import Modal from "react-bootstrap/Modal";
+import { Button, Row, Col, Modal, Card, Form } from "react-bootstrap";
 import { ChevronLeft, ChevronRight } from "react-bootstrap-icons";
 import { ReusableTable } from "../../Tabla";
 import "../../../styles/GrillaArticuloManufactura.css";
-import BotonEliminar from "../../layout/BotonEliminar.tsx";
-import BotonModificar from "../../layout/BotonModificar.tsx";
-import BotonVer from "../../layout/BotonVer.tsx";
-import BotonAlta from "../../layout/BotonAlta.tsx";
+import BotonEliminar from "../../layout/botones/BotonEliminar.tsx";
+import BotonModificar from "../../layout/botones/BotonModificar.tsx";
+import BotonVer from "../../layout/botones/BotonVer.tsx";
+import BotonAlta from "../../layout/botones/BotonAlta.tsx";
 import { Link } from "react-router-dom";
 
 function GrillaArticuloManufacturado() {
@@ -28,6 +27,8 @@ function GrillaArticuloManufacturado() {
     const [filtroEstado, setFiltroEstado] = useState(""); // "", "activo", "eliminado"
     const [filtroPrecioMin, setFiltroPrecioMin] = useState("");
     const [filtroPrecioMax, setFiltroPrecioMax] = useState("");
+    const [sortAsc, setSortAsc] = useState(true);
+
     const [categorias, setCategorias] = useState<Categoria[]>([]);
 
     // Modal
@@ -39,57 +40,144 @@ function GrillaArticuloManufacturado() {
     const [articuloSeleccionado, setArticuloSeleccionado] = useState<ArticuloManufacturado | null>(null);
     const [accionConfirmada, setAccionConfirmada] = useState<(() => void) | null>(null);
 
+
+    const [pageData, setPageData] = useState<{
+        content: ArticuloManufacturado[];
+        totalPages: number;
+        totalElements: number;
+        number: number;
+        size: number;
+    }>({
+        content: [],
+        totalPages: 0,
+        totalElements: 0,
+        number: 0,
+        size: 10
+    });
     // Función para cargar solo categorías de comidas
     const cargarCategoriasComidas = async () => {
         try {
             const todasLasCategorias = await CategoriaService.getAll();
 
-            // Filtrar para obtener solo categorías de comidas
-            // ID 1 corresponde a "Comidas" según los datos proporcionados
-            const categoriasComidas = todasLasCategorias.filter(categoria =>
-                (categoria.categoriaPadre && categoria.categoriaPadre.id === 1) // Subcategorías de comidas
-            );
+            // 1. Buscar la categoría padre "COMIDAS"
+            const padreComidas = todasLasCategorias.find(cat => cat.denominacion?.toUpperCase() === "COMIDAS");
 
-            setCategorias(categoriasComidas);
+            if (!padreComidas) {
+                setCategorias([]);
+                console.warn('No se encontró la categoría padre "COMIDAS"');
+                return;
+            }
+
+            // 2. Función recursiva para armar el árbol de categorías
+            const armarArbol = (padreId: number): Categoria[] => {
+                return todasLasCategorias
+                    .filter(cat => cat.categoriaPadre?.id === padreId && typeof cat.id === "number")
+                    .map(cat => ({
+                        ...cat,
+                        hijos: armarArbol(cat.id as number)
+                    }));
+            };
+
+            // 3. Construir el árbol desde la categoría padre "COMIDAS"
+            const categoriasArbol = [{
+                ...padreComidas,
+                hijos: armarArbol(padreComidas.id!)
+            }];
+
+            setCategorias(categoriasArbol);
         } catch (error) {
             console.error("Error al cargar categorías de comidas:", error);
+            setCategorias([]);
         }
     };
 
+    function flattenCategorias(categorias: any[], nivel = 0): { id: number, denominacion: string }[] {
+        let result: { id: number, denominacion: string }[] = [];
+        for (const cat of categorias) {
+            result.push({
+                id: cat.id,
+                denominacion: `${"— ".repeat(nivel)}${cat.denominacion}`
+            });
+            if (cat.hijos && cat.hijos.length > 0) {
+                result = result.concat(flattenCategorias(cat.hijos, nivel + 1));
+            }
+        }
+        return result;
+    }
+
+    useEffect(() => {
+        cargarCategoriasComidas();
+    }, []);
+
+    // Cargar artículos cuando cambien los filtros o la página
     useEffect(() => {
         cargarArticulos();
-        cargarCategoriasComidas(); // Cambiado para cargar solo categorías de comidas
-    }, []);
+    }, [page, filtroDenominacion, filtroCategoria, filtroEstado, filtroPrecioMin, filtroPrecioMax, sortAsc]);
 
     const cargarArticulos = async () => {
         setLoading(true);
         setError(null);
         try {
-            const data = await ArticuloManufacturadoService.getAll();
-            setArticulos(data);
-            // Simulamos paginación para el ejemplo
-            setTotalPages(Math.ceil(data.length / size));
+            // Construir objeto de filtros
+            const filtros: {
+                denominacion?: string;
+                categoriaId?: number;
+                eliminado?: boolean;
+                precioMin?: number;
+                precioMax?: number;
+            } = {};
+
+            if (filtroDenominacion.trim()) filtros.denominacion = filtroDenominacion.trim();
+            if (filtroCategoria) filtros.categoriaId = Number(filtroCategoria);
+            if (filtroEstado) filtros.eliminado = filtroEstado === "eliminado";
+            if (filtroPrecioMin !== "") filtros.precioMin = Number(filtroPrecioMin);
+            if (filtroPrecioMax !== "") filtros.precioMax = Number(filtroPrecioMax);
+
+            // Llamar al servicio con filtros
+            const data = await ArticuloManufacturadoService.getArticuloManufacturadoFiltrados(
+                filtros,
+                page,
+                size,
+                `denominacion,${sortAsc ? "asc" : "desc"}`
+            );
+
+            setPageData(data);
+            setArticulos(data.content); // Si seguís usando articulos para la tabla
+            setTotalPages(data.totalPages);
         } catch (err) {
             setError("Error al cargar los artículos manufacturados");
+            console.error("Error:", err);
         } finally {
             setLoading(false);
         }
     };
 
-    // Filtro local (puedes reemplazar por API si tienes endpoints específicos)
-    const articulosFiltrados = articulos.filter(a =>
-        (!filtroDenominacion || a.denominacion.toLowerCase().includes(filtroDenominacion.toLowerCase())) &&
-        (!filtroCategoria || String(a.categoria?.id) === filtroCategoria) &&
-        (!filtroEstado ||
-            (filtroEstado === "activo" && !a.eliminado) ||
-            (filtroEstado === "eliminado" && a.eliminado)
-        ) &&
-        (!filtroPrecioMin || a.precioVenta >= Number(filtroPrecioMin)) &&
-        (!filtroPrecioMax || a.precioVenta <= Number(filtroPrecioMax))
-    );
+    // Función para resetear la página cuando cambia un filtro
+    const aplicarFiltro = (filtroCallback: () => void) => {
+        setPage(0); // Resetear a la primera página
+        filtroCallback();
+    };
 
-    // Aplicar paginación local
-    const articulosPaginados = articulosFiltrados.slice(page * size, (page + 1) * size);
+    // Handlers para los filtros que resetan la página
+    const handleFiltroDenominacion = (valor: string) => {
+        aplicarFiltro(() => setFiltroDenominacion(valor));
+    };
+
+    const handleFiltroCategoria = (valor: string) => {
+        aplicarFiltro(() => setFiltroCategoria(valor));
+    };
+
+    const handleFiltroEstado = (valor: string) => {
+        aplicarFiltro(() => setFiltroEstado(valor));
+    };
+
+    const handleFiltroPrecioMin = (valor: string) => {
+        aplicarFiltro(() => setFiltroPrecioMin(valor));
+    };
+
+    const handleFiltroPrecioMax = (valor: string) => {
+        aplicarFiltro(() => setFiltroPrecioMax(valor));
+    };
 
     const handleVer = (row: ArticuloManufacturado) => {
         setArticuloSeleccionado(row);
@@ -110,11 +198,10 @@ function GrillaArticuloManufacturado() {
     const eliminarArticulo = async (id: number) => {
         try {
             await ArticuloManufacturadoService.delete(id);
-            setArticulos(prev =>
-                prev.map(a =>
-                    a.id === id ? { ...a, eliminado: true } : a
-                )
-            );
+
+            // Recargar la grilla después de eliminar
+            await cargarArticulos();
+
             setModalTitulo("Éxito");
             setModalMensaje("Artículo manufacturado eliminado correctamente");
             setMostrarModalInfo(true);
@@ -128,11 +215,10 @@ function GrillaArticuloManufacturado() {
     const darDeAlta = async (id: number) => {
         try {
             await ArticuloManufacturadoService.changeEliminado(id);
-            setArticulos(prev =>
-                prev.map(a =>
-                    a.id === id ? { ...a, eliminado: false } : a
-                )
-            );
+
+            // Recargar la grilla después de dar de alta
+            await cargarArticulos();
+
             setModalTitulo("Éxito");
             setModalMensaje("Artículo manufacturado dado de alta correctamente");
             setMostrarModalInfo(true);
@@ -143,6 +229,28 @@ function GrillaArticuloManufacturado() {
         }
     };
 
+    // Función para limpiar todos los filtros
+    const limpiarFiltros = () => {
+        setFiltroDenominacion("");
+        setFiltroCategoria("");
+        setFiltroEstado("");
+        setFiltroPrecioMin("");
+        setFiltroPrecioMax("");
+        setPage(0);
+    };
+
+    // Navegación de páginas
+    const irAPaginaAnterior = () => {
+        if (page > 0) {
+            setPage(page - 1);
+        }
+    };
+
+    const irAPaginaSiguiente = () => {
+        if (page < totalPages - 1) {
+            setPage(page + 1);
+        }
+    };
     // Definición de columnas para la tabla reusable
     const columns = [
         {
@@ -214,133 +322,172 @@ function GrillaArticuloManufacturado() {
     return (
         <div className="position-relative">
             <h2>Productos</h2>
-            {/* Filtros */}
-            <div className="filtros-container bg-light p-4 rounded mb-4 shadow-sm">
-                <div className="row g-3 align-items-center">
-                    <div className="col-md-3">
-                        <input
-                            type="text"
-                            className="form-control"
-                            placeholder="Buscar por denominación"
-                            value={filtroDenominacion}
-                            onChange={e => setFiltroDenominacion(e.target.value)}
-                        />
+
+            <Card className="mb-4 shadow-sm">
+                <Card.Header>
+                    <div className="d-flex justify-content-between align-items-center">
+                        <div className="d-flex align-items-center gap-3">
+                            <Card.Title className="mb-0">Gestión de Artículos Manufacturados</Card.Title>
+                        </div>
+                        <Link to="/FormularioManufacturado" style={{ textDecoration: "none" }}>
+                            <Button variant="success" size="sm">
+                                ➕ Crear Producto
+                            </Button>
+                        </Link>
                     </div>
-                    <div className="col-md-2">
-                        <select
-                            className="form-select"
-                            value={filtroCategoria}
-                            onChange={e => setFiltroCategoria(e.target.value)}
-                        >
-                            <option value="">Todas las categorías de comidas</option>
-                            {categorias.map(cat => (
-                                <option key={cat.id} value={cat.id}>{cat.denominacion}</option>
-                            ))}
-                        </select>
-                    </div>
-                    <div className="col-md-2">
-                        <select
-                            className="form-select"
-                            value={filtroEstado}
-                            onChange={e => setFiltroEstado(e.target.value)}
-                        >
-                            <option value="">Todos los estados</option>
-                            <option value="activo">Activo</option>
-                            <option value="eliminado">Eliminado</option>
-                        </select>
-                    </div>
-                    <div className="col-md-2">
-                        <input
-                            type="number"
-                            min="0"
-                            className="form-control"
-                            placeholder="Precio mín."
-                            value={filtroPrecioMin}
-                            onChange={e => setFiltroPrecioMin(e.target.value)}
-                        />
-                    </div>
-                    <div className="col-md-2">
-                        <input
-                            type="number"
-                            min="0"
-                            className="form-control"
-                            placeholder="Precio máx."
-                            value={filtroPrecioMax}
-                            onChange={e => setFiltroPrecioMax(e.target.value)}
-                        />
-                    </div>
-                    <div className="col-md-1 d-flex justify-content-center">
-                        <button
-                            type="button"
-                            className="btn btn-outline-primary btn-sm w-100"
-                            style={{ minHeight: '38px' }}
-                            onClick={() => {
-                                setFiltroDenominacion("");
-                                setFiltroCategoria("");
-                                setFiltroEstado("");
-                                setFiltroPrecioMin("");
-                                setFiltroPrecioMax("");
-                                setPage(0);
-                            }}
-                        >
-                            Ver Todos
-                        </button>
-                    </div>
-                </div>
-                <div className="text-center mt-4">
-                    <Link to="/FormularioManufacturado" className="btn btn-success">
-                        Crear Articulo Manufacturado
-                    </Link>
-                </div>
-            </div>
+                </Card.Header>
+                <Card.Body>
+                    <Form className="mb-0">
+                        <Row className="gy-2 align-items-center">
+                            <Col xs={12} md={8} lg={9} className="d-flex flex-wrap align-items-center gap-3">
+                                <div>
+                                    <Form.Label className="fw-bold mb-0 me-2">Denominación</Form.Label>
+                                    <Form.Control
+                                        size="sm"
+                                        type="text"
+                                        style={{ width: 180, display: "inline-block" }}
+                                        placeholder="Nombre del Producto"
+                                        value={filtroDenominacion}
+                                        onChange={e => handleFiltroDenominacion(e.target.value)}
+                                    />
+                                </div>
+                                <div>
+                                    <Form.Label className="fw-bold mb-0 me-2">Categoría</Form.Label>
+                                    <Form.Select
+                                        size="sm"
+                                        style={{ width: 180, display: "inline-block" }}
+                                        value={filtroCategoria}
+                                        onChange={e => handleFiltroCategoria(e.target.value)}
+                                    >
+                                        <option value="">Todas las categorías</option>
+                                        {flattenCategorias(categorias).map(cat => (
+                                            <option key={cat.id} value={cat.id}>{cat.denominacion}</option>
+                                        ))}
+                                    </Form.Select>
+                                </div>
+                                <div>
+                                    <Form.Label className="fw-bold mb-0 me-2">Estado</Form.Label>
+                                    <Form.Select
+                                        size="sm"
+                                        style={{ width: 140, display: "inline-block" }}
+                                        value={filtroEstado}
+                                        onChange={e => handleFiltroEstado(e.target.value)}
+                                    >
+                                        <option value="">Todos</option>
+                                        <option value="activo">Activo</option>
+                                        <option value="eliminado">Eliminado</option>
+                                    </Form.Select>
+                                </div>
+                                <div>
+                                    <Form.Label className="fw-bold mb-0 me-2">Precio Venta</Form.Label>
+                                    <Form.Control
+                                        size="sm"
+                                        type="number"
+                                        min="0"
+                                        style={{ width: 100, display: "inline-block" }}
+                                        placeholder="Mín."
+                                        value={filtroPrecioMin}
+                                        onChange={e => handleFiltroPrecioMin(e.target.value === "" ? "" : Math.max(0, Number(e.target.value)).toString())}
+                                    />
+                                    <span className="mx-1">-</span>
+                                    <Form.Control
+                                        size="sm"
+                                        type="number"
+                                        min="0"
+                                        style={{ width: 100, display: "inline-block" }}
+                                        placeholder="Máx."
+                                        value={filtroPrecioMax}
+                                        onChange={e => handleFiltroPrecioMax(e.target.value === "" ? "" : Math.max(0, Number(e.target.value)).toString())}
+                                    />
+                                </div>
+                            </Col>
+                            <Col xs={12} md={4} lg={3} className="d-flex flex-column align-items-end justify-content-center">
+                                <Button
+                                    variant="outline-secondary"
+                                    onClick={limpiarFiltros}
+                                    style={{ minWidth: 140, marginBottom: 6, height: 38 }}
+                                >
+                                    Limpiar
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant={sortAsc ? "outline-primary" : "outline-dark"}
+                                    onClick={() => setSortAsc((prev) => !prev)}
+                                    title="Alternar orden alfabético"
+                                    style={{ minWidth: 140, height: 38 }}
+                                >
+                                    {sortAsc ? "A → Z" : "Z → A"}
+                                </Button>
+                            </Col>
+                        </Row>
+                    </Form>
+                </Card.Body>
+            </Card>
 
             {/* Tabla con paginación */}
             <div className="p-3 border rounded bg-white shadow-sm">
-                {articulosPaginados.length === 0 ? (
+                {loading && (
+                    <div className="text-center py-4">
+                        <div className="spinner-border text-primary" role="status">
+                            <span className="visually-hidden">Cargando...</span>
+                        </div>
+                    </div>
+                )}
+
+                {error && (
+                    <div className="alert alert-danger">
+                        {error}
+                    </div>
+                )}
+
+                {!loading && !error && articulos.length === 0 ? (
                     <div className="text-center py-4">
                         <p className="text-muted mb-0">
                             No hay artículos manufacturados para mostrar
                         </p>
                     </div>
                 ) : (
-                    <>
-                        {/* Tabla */}
-                        <div className="table-responsive">
-                            <ReusableTable columns={columns} data={articulosPaginados} />
-                        </div>
+                    !loading && !error && (
+                        <>
+                            {/* Tabla */}
+                            <div className="table-responsive">
+                                <ReusableTable columns={columns} data={articulos} />
+                            </div>
 
-                        {/* Paginación */}
-                        <div className="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
-                            <div className="text-muted">
-                                Mostrando {articulosPaginados.length} artículos de {articulosFiltrados.length} total
+                            {/* Paginación */}
+                            <div className="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
+                                <div className="text-muted">
+                                    Mostrando {pageData.totalElements === 0 ? 0 : page * size + 1}
+                                    -
+                                    {page * size + pageData.content.length} de {pageData.totalElements} artículos
+                                </div>
+                                <div className="d-flex align-items-center gap-2">
+                                    <Button
+                                        variant="outline-secondary"
+                                        size="sm"
+                                        disabled={page === 0 || loading}
+                                        onClick={irAPaginaAnterior}
+                                    >
+                                        <ChevronLeft />
+                                    </Button>
+                                    <span className="px-2">
+                                        Página {page + 1} de {pageData.totalPages || 1}
+                                    </span>
+                                    <Button
+                                        variant="outline-secondary"
+                                        size="sm"
+                                        disabled={page >= pageData.totalPages - 1 || pageData.totalPages === 0 || loading}
+                                        onClick={irAPaginaSiguiente}
+                                    >
+                                        <ChevronRight />
+                                    </Button>
+                                </div>
                             </div>
-                            <div className="d-flex align-items-center gap-2">
-                                <Button
-                                    variant="outline-secondary"
-                                    size="sm"
-                                    disabled={page === 0}
-                                    onClick={() => setPage(page - 1)}
-                                >
-                                    <ChevronLeft />
-                                </Button>
-                                <span className="px-2">
-                  Página {page + 1} de {Math.ceil(articulosFiltrados.length / size) || 1}
-                </span>
-                                <Button
-                                    variant="outline-secondary"
-                                    size="sm"
-                                    disabled={page >= Math.ceil(articulosFiltrados.length / size) - 1}
-                                    onClick={() => setPage(page + 1)}
-                                >
-                                    <ChevronRight />
-                                </Button>
-                            </div>
-                        </div>
-                    </>
+                        </>
+                    )
                 )}
             </div>
-
-            <Modal show={showModalDetalle} onHide={() => { setShowModalDetalle(false); setArticuloSeleccionado(null); }} centered size="md">
+            <Modal show={showModalDetalle} onHide={() => { setShowModalDetalle(false); setArticuloSeleccionado(null); }} centered>
                 <Modal.Header closeButton className="bg-primary text-white">
                     <Modal.Title>🧾 Detalle del Artículo Manufacturado</Modal.Title>
                 </Modal.Header>
@@ -362,7 +509,7 @@ function GrillaArticuloManufacturado() {
                             <div className="text-start px-2">
                                 <p className="mb-2"><strong>🧪 Denominación:</strong> {articuloSeleccionado.denominacion}</p>
                                 <p className="mb-2"><strong>📝 Descripción:</strong> {articuloSeleccionado.descripcion}</p>
-                                <p className="mb-2"><strong>💰 Precio Venta:</strong> ${articuloSeleccionado.precioVenta.toFixed(2)}</p>
+                                <p className="mb-2"><strong>💰 Precio Venta:</strong> ${articuloSeleccionado.precioVenta != null ? articuloSeleccionado.precioVenta.toFixed(2) : "-"}</p>
                                 <p className="mb-2"><strong>📂 Categoría:</strong> {articuloSeleccionado.categoria?.denominacion || "-"}</p>
                                 <p className="mb-2"><strong>⚖️ Unidad de Medida:</strong> {articuloSeleccionado.unidadMedida?.denominacion || "-"}</p>
                                 <p className="mb-2"><strong>⏱️ Tiempo Estimado:</strong> {articuloSeleccionado.tiempoEstimadoMinutos} min</p>
@@ -397,7 +544,7 @@ function GrillaArticuloManufacturado() {
             </Modal>
 
             {/* Modal de confirmación */}
-            <Modal show={mostrarModalConfirmacion} onHide={() => {setMostrarModalConfirmacion(false); setAccionConfirmada(null)}}>
+            <Modal show={mostrarModalConfirmacion} onHide={() => { setMostrarModalConfirmacion(false); setAccionConfirmada(null) }}>
                 <Modal.Header closeButton>
                     <Modal.Title>{modalTitulo}</Modal.Title>
                 </Modal.Header>

@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Modal, Button, Form } from 'react-bootstrap';
 import Empleado  from '../../../models/Empleado';
-import Rol from '../../../models/enums/Rol';
 import Pedido from '../../../models/Pedido';
 
 interface Props {

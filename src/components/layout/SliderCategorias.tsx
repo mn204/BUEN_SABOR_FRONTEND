@@ -1,6 +1,6 @@
 import CategoriaCard from '../articulos/CategoriaCard';
-import FlechaDerecha from '../../assets/flecha.svg';
-import FlechaIzquierda from '../../assets/flechaIzquierda.svg';
+import FlechaDerecha from '../../assets/botones/flechaDerecha.svg';
+import FlechaIzquierda from '../../assets/botones/flechaIzquierda.svg';
 import { useEffect, useState, useRef } from 'react';
 import Categoria from '../../models/Categoria';
 import CategoriaService from '../../services/CategoriaService';
@@ -10,7 +10,7 @@ function Slider() {
     const [start, setStart] = useState(0);
     const [isMobile, setIsMobile] = useState(false);
     const sliderRef = useRef<HTMLDivElement>(null);
-    
+
     const visibleCount = 5;
 
     // Lista de denominaciones que deben aparecer (excluyendo "Insumos")
@@ -18,6 +18,7 @@ function Slider() {
         "Gaseosas",
         "Cervezas",
         "Aguas y otros",
+        "Aguas y Otros", // Agregado por si hay variación en la BD
         "Hamburguesas",
         "Pizzas",
         "Lomos",
@@ -33,9 +34,23 @@ function Slider() {
 
         checkIsMobile();
         window.addEventListener('resize', checkIsMobile);
-        
+
         return () => window.removeEventListener('resize', checkIsMobile);
     }, []);
+
+    // Función para validar si una categoría es válida
+    const isCategoriaValida = (categoria: Categoria | null): categoria is Categoria => {
+        if (!categoria || categoria.eliminado) {
+            return false;
+        }
+
+        // Si tiene categoría padre, verificar que la padre no esté eliminada
+        if (categoria.categoriaPadre && categoria.categoriaPadre.eliminado) {
+            return false;
+        }
+
+        return true;
+    };
 
     useEffect(() => {
         const fetchCategoriasPorDenominacion = async () => {
@@ -49,14 +64,25 @@ function Slider() {
                 // 'resultados' es un array de arrays; se aplana para tener una sola lista
                 const categoriasObtenidas = resultados.flat();
 
-                // Filtrar categorías válidas (no null/undefined)
-                const categoriasValidas = categoriasObtenidas.filter(
-                    (cat): cat is Categoria => cat != null && !cat.eliminado
+                // Filtrar categorías válidas (aplicar filtro completo aquí)
+                const categoriasValidas = categoriasObtenidas.filter(isCategoriaValida);
+
+                // Eliminar duplicados por ID (por si hay variaciones en denominación)
+                const categoriasSinDuplicados = categoriasValidas.filter((categoria, index, array) =>
+                    array.findIndex(c => c.id === categoria.id) === index
                 );
 
-                setCategorias(categoriasValidas);
+                console.log('Categorías válidas encontradas:', categoriasSinDuplicados.length);
+                console.log('Categorías:', categoriasSinDuplicados.map(c => `${c.denominacion} (ID: ${c.id})`));
+
+                setCategorias(categoriasSinDuplicados);
+
+                // Resetear el índice de inicio si es necesario
+                setStart(0);
+
             } catch (error) {
                 console.error("Error al obtener las categorías por denominación:", error);
+                setCategorias([]); // Asegurar que el estado sea consistente en caso de error
             }
         };
 
@@ -65,7 +91,7 @@ function Slider() {
 
     const handleNext = () => {
         if (categorias.length === 0) return;
-        
+
         if (isMobile && sliderRef.current) {
             // En móvil, desplazar suavemente
             const cardWidth = 160; // Aproximadamente el ancho de una tarjeta
@@ -82,7 +108,7 @@ function Slider() {
 
     const handlePrev = () => {
         if (categorias.length === 0) return;
-        
+
         if (isMobile && sliderRef.current) {
             // En móvil, desplazar suavemente hacia atrás
             const cardWidth = 160;
@@ -99,11 +125,9 @@ function Slider() {
 
     // Para desktop: mostrar solo 5 categorías a la vez, con loop circular
     const visibleCategorias = [];
-    if (!isMobile) {
+    if (!isMobile && categorias.length > 0) {
         for (let i = 0; i < Math.min(visibleCount, categorias.length); i++) {
-            if (categorias.length > 0) {
-                visibleCategorias.push(categorias[(start + i) % categorias.length]);
-            }
+            visibleCategorias.push(categorias[(start + i) % categorias.length]);
         }
     }
 
@@ -172,6 +196,20 @@ function Slider() {
         flexShrink: 0
     } : {};
 
+    // Si no hay categorías válidas, mostrar mensaje o no renderizar nada
+    if (categorias.length === 0) {
+        return (
+            <div style={{
+                textAlign: 'center',
+                padding: '40px',
+                color: '#666',
+                fontSize: '16px'
+            }}>
+                No hay categorías disponibles en este momento.
+            </div>
+        );
+    }
+
     return (
         <div style={sliderStyles} className="sliderCategorias">
             {/* CSS personalizado para ocultar scrollbar */}
@@ -216,15 +254,15 @@ function Slider() {
                 disabled={categorias.length <= (isMobile ? 1 : visibleCount)}
                 onMouseEnter={(e) => {
                     if (!e.currentTarget.disabled) {
-                        e.currentTarget.style.transform = isMobile 
-                            ? 'translateY(-50%) scale(1.1)' 
+                        e.currentTarget.style.transform = isMobile
+                            ? 'translateY(-50%) scale(1.1)'
                             : 'scale(1.1)';
                         e.currentTarget.style.boxShadow = '0 6px 20px rgba(0, 0, 0, 0.2)';
                     }
                 }}
                 onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = isMobile 
-                        ? 'translateY(-50%)' 
+                    e.currentTarget.style.transform = isMobile
+                        ? 'translateY(-50%)'
                         : 'scale(1)';
                     e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
                 }}
@@ -232,29 +270,25 @@ function Slider() {
                 <img src={FlechaIzquierda} alt="Anterior" />
             </button>
 
-            <div 
+            <div
                 ref={sliderRef}
                 className="slider-container"
                 style={containerStyles}
             >
                 {isMobile ? (
-                    // En móvil: mostrar todas las categorías en scroll horizontal
-                    categorias.map((cat, index) => (
-                        cat && (
-                            <div key={cat?.id ? cat.id : `cat-mobile-${index}`} style={cardWrapperStyles}>
-                                <CategoriaCard categoria={cat} />
-                            </div>
-                        )
+                    // En móvil: mostrar todas las categorías válidas
+                    categorias.map((categoria, index) => (
+                        <div key={categoria.id} style={cardWrapperStyles}>
+                            <CategoriaCard categoria={categoria} />
+                        </div>
                     ))
                 ) : (
                     // En desktop: mostrar solo las visibles con navegación por botones
-                    visibleCategorias.map((cat, index) => (
-                        cat && (
-                            <CategoriaCard
-                                key={cat?.id ? cat.id : `cat-desktop-${start}-${index}`}
-                                categoria={cat}
-                            />
-                        )
+                    visibleCategorias.map((categoria, index) => (
+                        <CategoriaCard
+                            key={`${categoria.id}-${start}-${index}`}
+                            categoria={categoria}
+                        />
                     ))
                 )}
             </div>
@@ -266,15 +300,15 @@ function Slider() {
                 disabled={categorias.length <= (isMobile ? 1 : visibleCount)}
                 onMouseEnter={(e) => {
                     if (!e.currentTarget.disabled) {
-                        e.currentTarget.style.transform = isMobile 
-                            ? 'translateY(-50%) scale(1.1)' 
+                        e.currentTarget.style.transform = isMobile
+                            ? 'translateY(-50%) scale(1.1)'
                             : 'scale(1.1)';
                         e.currentTarget.style.boxShadow = '0 6px 20px rgba(0, 0, 0, 0.2)';
                     }
                 }}
                 onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = isMobile 
-                        ? 'translateY(-50%)' 
+                    e.currentTarget.style.transform = isMobile
+                        ? 'translateY(-50%)'
                         : 'scale(1)';
                     e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
                 }}

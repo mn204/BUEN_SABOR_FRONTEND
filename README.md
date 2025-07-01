@@ -103,10 +103,10 @@ http://localhost:8080
 
 ## 👥 Autores
 
-- Lucas Gonzalez  
-- Juan Cruz Gonzalez  
-- Manuel Rodríguez  
-- Sebatian Luna  
+- Lucas Gonzalez
+- Juan Cruz Gonzalez
+- Manuel Rodríguez
+- Sebatian Luna
 - Juan Cruz Vargas
 
 ---

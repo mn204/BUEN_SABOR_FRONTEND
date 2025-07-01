@@ -2,9 +2,10 @@ import { useContext } from 'react'
 import { carritoContext } from '../context/CarritoContext'
 
 export function useCarrito() {
-  const context = useContext(carritoContext);
-  if (!context) {
-    throw new Error("useCarrito debe ser usado dentro del ambito de un CartProvider");
-  }
-  return context;
+  const ctx = useContext(carritoContext);
+  if (!ctx) throw new Error("useCarrito debe usarse dentro de CarritoProvider");
+  return {
+    pedido: ctx.pedidoActual, // <-- importante
+    ...ctx
+  };
 }

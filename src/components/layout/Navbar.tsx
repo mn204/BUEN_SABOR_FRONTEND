@@ -1,8 +1,8 @@
 import '../../styles/navbar.css'
 import LogoEmpresa from '../../assets/LogoEmpresa.png';
-import Vector from '../../assets/Carrito.svg';
+import Vector from '../../assets/navbar/Carrito.svg';
 import Buscador from './Buscador';
-import { useEffect, useMemo, useState } from 'react';
+import {  useMemo, useState } from 'react';
 import { Dropdown, Modal, Form } from 'react-bootstrap'; // <- Agregado Form aquí
 import LoginUsuario from '../auth/LoginUsuario.tsx';
 import { Link, useNavigate } from 'react-router-dom';
@@ -11,6 +11,11 @@ import { useAuth } from "../../context/AuthContext.tsx";
 import { useSucursal } from "../../context/SucursalContextEmpleado.tsx";
 import { useCarrito } from '../../hooks/useCarrito.ts';
 import { useSucursalUsuario } from '../../context/SucursalContext.tsx';
+import PerfilIcon from '../../assets/navbar/perfil.svg';
+import DomiciliosIcon from '../../assets/navbar/domicilios.svg';
+import PedidosIcon from '../../assets/navbar/pedidos.svg';
+import LogoutIcon from '../../assets/navbar/logout.svg';
+
 
 function Navbar() {
     const carritoCtx = useCarrito();
@@ -18,7 +23,7 @@ function Navbar() {
     const [isLoginView, setIsLoginView] = useState(true);
     const [busqueda, setBusqueda] = useState("");
     const navigate = useNavigate();
-    const { isAuthenticated, getUserDisplayName, logout, usuario, user, empleado } = useAuth();
+    const { isAuthenticated, getUserDisplayName, logout, usuario, empleado } = useAuth();
     const { sucursalActual, sucursales, cambiarSucursal, esModoTodasSucursales } = useSucursal();
     const { sucursalActualUsuario, sucursalesUsuario, cambiarSucursalUsuario, esSucursalAbierta, mostrarModalCerrada, setMostrarModalCerrada } = useSucursalUsuario();
     const cantidadArticulos = useMemo(() => {
@@ -177,17 +182,29 @@ function Navbar() {
                                             <small className="text-muted">Rol: {usuario.rol}</small>
                                         )}
                                     </Dropdown.Header>
-                                    <Dropdown.Item as={Link} to="/perfil">Mi Perfil</Dropdown.Item>
+                                    <Dropdown.Item as={Link} to="/perfil" className="d-flex align-items-center">
+                                        <img src={PerfilIcon} alt="Perfil" width="16" height="16" className="me-2" />
+                                        Mi Perfil
+                                    </Dropdown.Item>
                                     <Dropdown.Divider />
                                     {usuario?.rol === "CLIENTE" && (
                                         <>
-                                            <Dropdown.Item as={Link} to="/domicilios">Mis Domicilios</Dropdown.Item>
+                                            <Dropdown.Item as={Link} to="/domicilios" className="d-flex align-items-center">
+                                                <img src={DomiciliosIcon} alt="Domicilios" width="16" height="16" className="me-2" />
+                                                Mis Domicilios
+                                            </Dropdown.Item>
                                             <Dropdown.Divider />
-                                            <Dropdown.Item as={Link} to="/pedidos">Mis Pedidos</Dropdown.Item>
+                                            <Dropdown.Item as={Link} to="/pedidos" className="d-flex align-items-center">
+                                                <img src={PedidosIcon} alt="Pedidos" width="16" height="16" className="me-2" />
+                                                Mis Pedidos
+                                            </Dropdown.Item>
                                             <Dropdown.Divider />
                                         </>
                                     )}
-                                    <Dropdown.Item onClick={handleLogout}>Cerrar Sesión</Dropdown.Item>
+                                    <Dropdown.Item onClick={handleLogout} className="d-flex align-items-center">
+                                        <img src={LogoutIcon} alt="Cerrar Sesión" width="16" height="16" className="me-2" />
+                                        Cerrar Sesión
+                                    </Dropdown.Item>
                                 </Dropdown.Menu>
                             </Dropdown>
                         ) : (

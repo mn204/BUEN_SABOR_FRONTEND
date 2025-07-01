@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { Button, Form, Modal, Alert } from "react-bootstrap";
 import type Cliente from "../../models/Cliente.ts";
-import { obtenerUsuarioPorDni } from "../../services/UsuarioService";
 import { actualizarCliente } from "../../services/ClienteService.ts";
 
 interface Props {
@@ -14,29 +13,63 @@ interface Props {
 const FormDatosCliente = ({ show, onHide, cliente, onClienteActualizado }: Props) => {
     const [loading, setLoading] = useState(false);
     const [formError, setFormError] = useState<string | null>(null);
-    const [dniError, setDniError] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
+    const [telefonoError, setTelefonoError] = useState('');
 
     // Estados del formulario
     const [nombre, setNombre] = useState("");
     const [apellido, setApellido] = useState("");
-    const [dni, setDni] = useState("");
     const [fechaNacimiento, setFechaNacimiento] = useState("");
-    const [telefono, setTelefono] = useState("");
+    const [telefono, setTelefono] = useState(""); // solo números
+    const [telefonoFormateado, setTelefonoFormateado] = useState("");
+
+    const formatearTelefono = (valor: string): string => {
+        // Elimina cualquier cosa que no sea número
+        const soloNumeros = valor.replace(/\D/g, "").slice(0, 10); // máx 10 dígitos
+
+        if (soloNumeros.length <= 3) return soloNumeros;
+        if (soloNumeros.length <= 6) {
+            return `${soloNumeros.slice(0, 3)}-${soloNumeros.slice(3)}`;
+        }
+        return `${soloNumeros.slice(0, 3)}-${soloNumeros.slice(3, 6)}-${soloNumeros.slice(6)}`;
+    };
+
+    const esTelefonoValido = (telefono: string): boolean => {
+        const soloNumeros = telefono.replace(/\D/g, "");
+        return soloNumeros.length === 10;
+    };
 
     // Cargar datos iniciales del cliente
     useEffect(() => {
         if (cliente && show) {
             setNombre(cliente.nombre || "");
             setApellido(cliente.apellido || "");
-            setDni(cliente.usuario?.dni || "");
-            setTelefono(cliente.telefono || "");
-            
+
+            // Formatear teléfono
+            if (cliente.telefono) {
+                const telefonoLimpio = cliente.telefono.replace(/\D/g, "");
+                setTelefono(telefonoLimpio);
+                setTelefonoFormateado(formatearTelefono(telefonoLimpio));
+
+                // Validar teléfono inicial
+                if (telefonoLimpio.length < 10) {
+                    setTelefonoError("El número debe tener exactamente 10 dígitos.");
+                } else {
+                    setTelefonoError('');
+                }
+            } else {
+                setTelefono("");
+                setTelefonoFormateado("");
+                setTelefonoError('');
+            }
+
             // Formatear fecha para el input date
             if (cliente.fechaNacimiento) {
                 const fecha = new Date(cliente.fechaNacimiento);
                 const fechaFormateada = fecha.toISOString().split('T')[0];
                 setFechaNacimiento(fechaFormateada);
+            } else {
+                setFechaNacimiento("");
             }
         }
     }, [cliente, show]);
@@ -45,50 +78,19 @@ const FormDatosCliente = ({ show, onHide, cliente, onClienteActualizado }: Props
     useEffect(() => {
         if (show) {
             setFormError(null);
-            setDniError(null);
             setSuccessMessage(null);
         }
     }, [show]);
 
-    const handleDniChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const value = e.target.value;
-
-        // Solo permitir dígitos
-        if (!/^\d*$/.test(value)) return;
-
-        setDni(value);
-        setDniError(null);
-
-        // Si tiene valor y es diferente al DNI actual, verificar disponibilidad
-        if (value && value !== cliente.usuario?.dni) {
-            try {
-                const usuario = await obtenerUsuarioPorDni(value);
-                if (usuario) {
-                    setDniError("DNI ya está en uso");
-                }
-            } catch (error) {
-                console.error("Error al verificar DNI:", error);
-            }
-        }
-    };
-
-    const handleTelefonoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const value = e.target.value;
-        if (/^\d*$/.test(value)) {
-            setTelefono(value);
-        }
-    };
-
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        
-        if (!nombre || !apellido || !dni || !fechaNacimiento || !telefono) {
+
+        if (!nombre || !apellido || !fechaNacimiento || !telefono) {
             setFormError("Por favor completá todos los campos.");
             return;
         }
-
-        if (dniError) {
-            setFormError("No podés guardar con errores en el DNI.");
+        if (!esTelefonoValido(telefono)) {
+            setTelefonoError("El número debe tener exactamente 10 dígitos.");
             return;
         }
 
@@ -97,16 +99,6 @@ const FormDatosCliente = ({ show, onHide, cliente, onClienteActualizado }: Props
         setSuccessMessage(null);
 
         try {
-            // Verificar DNI solo si cambió
-            if (dni !== cliente.usuario?.dni) {
-                const usuarioPorDni = await obtenerUsuarioPorDni(dni);
-                if (usuarioPorDni) {
-                    setFormError("El DNI ya está registrado.");
-                    setLoading(false);
-                    return;
-                }
-            }
-
             const clienteActualizado: Cliente = {
                 ...cliente,
                 nombre: nombre.trim(),
@@ -114,8 +106,7 @@ const FormDatosCliente = ({ show, onHide, cliente, onClienteActualizado }: Props
                 telefono: telefono.trim(),
                 fechaNacimiento: new Date(fechaNacimiento),
                 usuario: {
-                    ...cliente.usuario!,
-                    dni: dni.trim()
+                    ...cliente.usuario!
                 }
             };
 
@@ -124,7 +115,7 @@ const FormDatosCliente = ({ show, onHide, cliente, onClienteActualizado }: Props
             if (response) {
                 setSuccessMessage("¡Datos actualizados correctamente!");
                 onClienteActualizado(response);
-                
+
                 // Cerrar modal después de 1.5 segundos
                 setTimeout(() => {
                     onHide();
@@ -152,7 +143,7 @@ const FormDatosCliente = ({ show, onHide, cliente, onClienteActualizado }: Props
             <Modal.Header closeButton={!loading}>
                 <Modal.Title>Editar Datos Personales</Modal.Title>
             </Modal.Header>
-            
+
             <Modal.Body>
                 <Form onSubmit={handleSubmit}>
                     <Form.Group controlId="nombre" className="mb-3">
@@ -179,22 +170,6 @@ const FormDatosCliente = ({ show, onHide, cliente, onClienteActualizado }: Props
                         />
                     </Form.Group>
 
-                    <Form.Group controlId="dni" className="mb-3">
-                        <Form.Label>DNI</Form.Label>
-                        <Form.Control
-                            type="text"
-                            placeholder="DNI"
-                            value={dni}
-                            onChange={handleDniChange}
-                            isInvalid={!!dniError}
-                            disabled={loading}
-                            required
-                        />
-                        <Form.Control.Feedback type="invalid">
-                            {dniError}
-                        </Form.Control.Feedback>
-                    </Form.Group>
-
                     <Form.Group controlId="fechaNacimiento" className="mb-3">
                         <Form.Label>Fecha de Nacimiento</Form.Label>
                         <Form.Control
@@ -212,11 +187,30 @@ const FormDatosCliente = ({ show, onHide, cliente, onClienteActualizado }: Props
                         <Form.Control
                             type="text"
                             placeholder="Teléfono"
-                            value={telefono}
-                            onChange={handleTelefonoChange}
+                            value={telefonoFormateado}
+                            onChange={(e) => {
+                                const input = e.target.value;
+                                const soloNumeros = input.replace(/\D/g, "").slice(0, 10); // Solo 10 dígitos
+
+                                setTelefono(soloNumeros); // Guardamos sin formato
+                                setTelefonoFormateado(formatearTelefono(soloNumeros)); // Mostramos formateado
+
+                                // Validamos longitud
+                                if (soloNumeros.length < 10) {
+                                    setTelefonoError("El número debe tener exactamente 10 dígitos.");
+                                } else {
+                                    setTelefonoError('');
+                                }
+                            }}
+                            isInvalid={!!telefonoError}
                             disabled={loading}
-                            required
                         />
+                        <Form.Control.Feedback type="invalid">
+                            {telefonoError}
+                        </Form.Control.Feedback>
+                        <Form.Text className="text-muted">
+                            El número debe tener 10 dígitos, sin el 15 y con el código de área.
+                        </Form.Text>
                     </Form.Group>
 
                     {formError && (
@@ -234,17 +228,17 @@ const FormDatosCliente = ({ show, onHide, cliente, onClienteActualizado }: Props
             </Modal.Body>
 
             <Modal.Footer>
-                <Button 
-                    variant="secondary" 
+                <Button
+                    variant="secondary"
                     onClick={handleClose}
                     disabled={loading}
                 >
                     Cancelar
                 </Button>
-                <Button 
-                    variant="primary" 
+                <Button
+                    variant="primary"
                     onClick={handleSubmit}
-                    disabled={loading || !!dniError}
+                    disabled={loading}
                 >
                     {loading ? "Guardando..." : "Guardar Cambios"}
                 </Button>

@@ -112,7 +112,25 @@ const PromocionDetalle: React.FC = () => {
         );
     }
 
-    if (!promocion) {
+    // Verifica si alguna categoría asociada a los artículos de los detalles está eliminada (recursivamente)
+    const isCategoriaEliminada = (categoria: any): boolean => {
+        if (!categoria) return false;
+        if (categoria.eliminado) return true;
+        return isCategoriaEliminada(categoria.categoriaPadre);
+    };
+
+    // Si la promoción no existe, está eliminada, o alguna categoría de algún artículo está eliminada, no mostrar la promoción
+    if (
+        !promocion ||
+        promocion.eliminado ||
+        (promocion.detalles &&
+            promocion.detalles.some(
+                detalle =>
+                    detalle.articulo &&
+                    isCategoriaEliminada(detalle.articulo.categoria)
+            )
+        )
+    ) {
         return (
             <div className="promocion-detalle">
                 <div className="promocion-detalle__not-found">

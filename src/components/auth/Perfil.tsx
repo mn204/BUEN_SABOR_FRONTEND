@@ -18,7 +18,11 @@ function Perfil() {
     const [showEmailModal, setShowEmailModal] = useState(false);
     const [showImagenModal, setShowImagenModal] = useState(false);
     const [showFormDatos, setShowFormDatos] = useState(false);
-
+    const [showPasswordModal, setShowPasswordModal] = useState(false);
+    const [showLogoutModal, setShowLogoutModal] = useState(false);
+    const [showPasswordSuccessModal, setShowPasswordSuccessModal] = useState(false);
+    const [showPasswordErrorModal, setShowPasswordErrorModal] = useState(false);
+    const [passwordErrorMessage, setPasswordErrorMessage] = useState('');
     const [nuevaImagen, setNuevaImagen] = useState<File | null>(null);
 
     const handleAbrirModalImagen = () => setShowImagenModal(true);
@@ -37,7 +41,7 @@ function Perfil() {
     const [success, setSuccess] = useState('')
 
     // Agregar setCliente y setEmpleado del contexto
-    const { cliente, empleado, usuario, user, logout, setCliente, setEmpleado } = useAuth();
+    const { cliente, empleado, usuario,  logout, setCliente, setEmpleado } = useAuth();
 
     const esEmpleado = !!empleado;
     const esCliente = !!cliente;
@@ -48,12 +52,12 @@ function Perfil() {
     const fechaNacimiento = esEmpleado ? empleado?.fechaNacimiento : cliente?.fechaNacimiento;
     // @ts-ignore
     const fechaFormateada = fechaNacimiento?.split('-').reverse().join('/');
-    const dni = usuario?.dni;
+    const dni = esEmpleado ? empleado?.dni :  null;
     const email = usuario?.email;
     const rol = usuario?.rol;
     const providerId = usuario?.providerId;
 
-    const domicilio = esEmpleado ? empleado?.domicilio : null
+    const domicilio = esEmpleado ? empleado?.domicilio : null;
     const esEmailValido = (email: string): boolean => {
         const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         return regex.test(email);
@@ -149,23 +153,31 @@ function Perfil() {
             }
         }
     };
-    const handleCambiarContrasena = async () => {
-        if (window.confirm('¿Deseas cambiar tu contraseña? Se enviará un mail para continuar el proceso.')) {
-            if (usuario?.email) {
-                try {
-                    await sendPasswordResetEmail(auth, usuario.email);
-                    alert('Se ha enviado un correo para restablecer tu contraseña.');
-                } catch (error: any) {
-                    alert('Error al enviar el correo: ' + error.message);
-                }
+    const handleCambiarContrasena = () => {
+        setShowPasswordModal(true);
+    };
+
+    const handleConfirmarCambioContrasena = async () => {
+        setShowPasswordModal(false);
+        if (usuario?.email) {
+            try {
+                await sendPasswordResetEmail(auth, usuario.email);
+                setShowPasswordSuccessModal(true);
+            } catch (error: any) {
+                setPasswordErrorMessage(error.message);
+                setShowPasswordErrorModal(true);
             }
         }
-    }
-    const handleCerrarSesion = async () => {
-        if (window.confirm("¿Seguro que quieres cerrar sesión?")){
-            await logout();
-            window.location.href = '/'; // Redirige al home después del logout
-        }
+    };
+
+    const handleCerrarSesion = () => {
+        setShowLogoutModal(true);
+    };
+
+    const handleConfirmarCerrarSesion = async () => {
+        setShowLogoutModal(false);
+        await logout();
+        window.location.href = '/';
     };
     const handleSubirImagen = async () => {
         if (!nuevaImagen || !usuario) return;
@@ -233,7 +245,8 @@ function Perfil() {
                                                 <p className="mb-0 fw-bold text-dark">{nombre} {apellido}</p>
                                             </div>
                                         </Col>
-                                        
+                                        {esEmpleado && (
+
                                         <Col md={6}>
                                             <div className="info-item p-3 bg-light rounded-3 h-100">
                                                 <div className="d-flex align-items-center mb-2">
@@ -243,7 +256,9 @@ function Perfil() {
                                                 <p className="mb-0 fw-bold text-dark">{dni}</p>
                                             </div>
                                         </Col>
-                                        
+                                            )
+                                        }
+
                                         <Col md={6}>
                                             <div className="info-item p-3 bg-light rounded-3 h-100">
                                                 <div className="d-flex align-items-center mb-2">
@@ -607,6 +622,112 @@ function Perfil() {
                     </Button>
                 </Modal.Footer>
             </Modal>
+            {/* Modal Cambiar Contraseña */}
+            <Modal show={showPasswordModal} onHide={() => setShowPasswordModal(false)} centered>
+                <Modal.Header closeButton className="border-0 pb-0">
+                    <Modal.Title className="text-warning fw-bold">
+                        <i className="bi bi-key me-2"></i>
+                        Cambiar Contraseña
+                    </Modal.Title>
+                </Modal.Header>
+                <Modal.Body className="px-4 py-4">
+                    <div className="alert alert-info border-0 rounded-3 mb-4">
+                        <i className="bi bi-info-circle me-2"></i>
+                        Se enviará un correo electrónico a tu email registrado con las instrucciones para cambiar tu contraseña.
+                    </div>
+                    <div className="text-center">
+                        <i className="bi bi-envelope-paper display-1 text-warning mb-3"></i>
+                        <p className="text-muted">¿Deseas continuar con el cambio de contraseña?</p>
+                    </div>
+                </Modal.Body>
+                <Modal.Footer className="border-0 pt-0">
+                    <Button variant="outline-secondary" size="lg" onClick={() => setShowPasswordModal(false)} className="px-4 rounded-3">
+                        <i className="bi bi-x-lg me-1"></i>
+                        Cancelar
+                    </Button>
+                    <Button variant="warning" size="lg" onClick={handleConfirmarCambioContrasena} className="px-4 rounded-3 fw-semibold">
+                        <i className="bi bi-check-lg me-1"></i>
+                        Enviar Email
+                    </Button>
+                </Modal.Footer>
+            </Modal>
+
+            {/* Modal Cerrar Sesión */}
+            <Modal show={showLogoutModal} onHide={() => setShowLogoutModal(false)} centered>
+                <Modal.Header closeButton className="border-0 pb-0">
+                    <Modal.Title className="text-danger fw-bold">
+                        <i className="bi bi-box-arrow-right me-2"></i>
+                        Cerrar Sesión
+                    </Modal.Title>
+                </Modal.Header>
+                <Modal.Body className="px-4 py-4">
+                    <div className="text-center">
+                        <i className="bi bi-question-circle display-1 text-danger mb-3"></i>
+                        <h5 className="mb-3">¿Estás seguro que quieres cerrar sesión?</h5>
+                        <p className="text-muted">Tendrás que volver a iniciar sesión para acceder a tu cuenta.</p>
+                    </div>
+                </Modal.Body>
+                <Modal.Footer className="border-0 pt-0">
+                    <Button variant="outline-secondary" size="lg" onClick={() => setShowLogoutModal(false)} className="px-4 rounded-3">
+                        <i className="bi bi-x-lg me-1"></i>
+                        Cancelar
+                    </Button>
+                    <Button variant="danger" size="lg" onClick={handleConfirmarCerrarSesion} className="px-4 rounded-3 fw-semibold">
+                        <i className="bi bi-check-lg me-1"></i>
+                        Cerrar Sesión
+                    </Button>
+                </Modal.Footer>
+            </Modal>
+
+            {/* Modal Éxito Cambio Contraseña */}
+            <Modal show={showPasswordSuccessModal} onHide={() => setShowPasswordSuccessModal(false)} centered>
+                <Modal.Header closeButton className="border-0 pb-0">
+                    <Modal.Title className="text-success fw-bold">
+                        <i className="bi bi-check-circle me-2"></i>
+                        Email Enviado
+                    </Modal.Title>
+                </Modal.Header>
+                <Modal.Body className="px-4 py-4">
+                    <div className="text-center">
+                        <i className="bi bi-check-circle display-1 text-success mb-3"></i>
+                        <h5 className="mb-3">¡Email enviado correctamente!</h5>
+                        <p className="text-muted">Se ha enviado un correo para restablecer tu contraseña. Revisa tu bandeja de entrada.</p>
+                    </div>
+                </Modal.Body>
+                <Modal.Footer className="border-0 pt-0">
+                    <Button variant="success" size="lg" onClick={() => setShowPasswordSuccessModal(false)} className="px-4 rounded-3 fw-semibold">
+                        <i className="bi bi-check-lg me-1"></i>
+                        Entendido
+                    </Button>
+                </Modal.Footer>
+            </Modal>
+
+            {/* Modal Error Cambio Contraseña */}
+            <Modal show={showPasswordErrorModal} onHide={() => setShowPasswordErrorModal(false)} centered>
+                <Modal.Header closeButton className="border-0 pb-0">
+                    <Modal.Title className="text-danger fw-bold">
+                        <i className="bi bi-exclamation-triangle me-2"></i>
+                        Error
+                    </Modal.Title>
+                </Modal.Header>
+                <Modal.Body className="px-4 py-4">
+                    <div className="text-center">
+                        <i className="bi bi-exclamation-triangle display-1 text-danger mb-3"></i>
+                        <h5 className="mb-3">Error al enviar el correo</h5>
+                        <div className="alert alert-danger border-0 rounded-3">
+                            <i className="bi bi-exclamation-triangle me-1"></i>
+                            {passwordErrorMessage}
+                        </div>
+                    </div>
+                </Modal.Body>
+                <Modal.Footer className="border-0 pt-0">
+                    <Button variant="danger" size="lg" onClick={() => setShowPasswordErrorModal(false)} className="px-4 rounded-3 fw-semibold">
+                        <i className="bi bi-check-lg me-1"></i>
+                        Cerrar
+                    </Button>
+                </Modal.Footer>
+            </Modal>
+
         </div>
     );
 }

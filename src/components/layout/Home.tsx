@@ -8,17 +8,38 @@ import type Promocion from '../../models/Promocion';
 import SucursalService from '../../services/SucursalService';
 import { useSucursalUsuario } from '../../context/SucursalContext';
 import { Form } from 'react-bootstrap';
+import PromocionService from '../../services/PromocionService';
 
 function Home() {
-    const [promocion, setPromocion] = useState<Promocion[]>([]);
+    const [promocionConStock, setPromocionConStock] = useState<Promocion[]>([]);
     const { sucursalActualUsuario, sucursalesUsuario, cambiarSucursalUsuario } = useSucursalUsuario();
 
     useEffect(() => {
         const fetchPromocion = async () => {
-            console.log("sucursal: ", sucursalActualUsuario)
+            setPromocionConStock([]);
+            if (!sucursalActualUsuario) return;
             try {
-                const response = await SucursalService.getAllBySucursalId(sucursalActualUsuario!.id!)
-                    .then((promos) => setPromocion(promos));
+                const promos = await SucursalService.getAllBySucursalId(sucursalActualUsuario.id!);
+                const isCategoriaEliminada = (categoria: any): boolean => {
+                    if (!categoria) return false;
+                    if (categoria.eliminado) return true;
+                    return isCategoriaEliminada(categoria.categoriaPadre);
+                };
+
+                // Filtrar promociones que tienen stock y cuyos artículos no tienen categoría eliminada
+                const promosConStock = await Promise.all(
+                    promos.map(async (promo) => {
+                        // Verificar si algún detalle tiene artículo con categoría eliminada
+                        const tieneCategoriaEliminada = promo.detalles?.some(
+                            (detalle: any) => isCategoriaEliminada(detalle.articulo?.categoria)
+                        );
+                        if (tieneCategoriaEliminada) return null;
+
+                        const tieneStock = await PromocionService.consultarStockPromocion(promo, 1, sucursalActualUsuario);
+                        return tieneStock ? promo : null;
+                    })
+                );
+                setPromocionConStock(promosConStock.filter(Boolean) as Promocion[]);
             } catch (error) {
                 console.error("Error al buscar promoción:", error);
             }
@@ -29,7 +50,7 @@ function Home() {
 
     return (
         <div className="home">
-            <div className="SelectSucursalHome sucursal text-white align-items-center justift-content-center" style={{ width: '100%'}}>
+            <div className="SelectSucursalHome sucursal text-white align-items-center justift-content-center" style={{ width: '100%' }}>
                 <Form.Select
                     id="selectSucursalUsuario2"
                     value={sucursalActualUsuario?.id || ""}
@@ -38,7 +59,7 @@ function Home() {
                         const sucursal = sucursalesUsuario.find(s => s.id === id);
                         if (sucursal) cambiarSucursalUsuario(sucursal);
                     }}
-                    style={{ width: '100%', minWidth: '200px', margin: "1px 10px 10px 10px"}}
+                    style={{ width: '100%', minWidth: '200px', margin: "1px 10px 10px 10px" }}
                 >
                     {sucursalesUsuario.map(s => (
                         <option key={s.id} value={s.id}>{s.nombre}</option>
@@ -52,9 +73,9 @@ function Home() {
             <Slider />
 
             <h2 className='categoriasTitle mt-5 mb-5 m-4'>¡Nuestras Promos!</h2>
-            {promocion.length > 0 ? (
+            {promocionConStock.length > 0 ? (
                 <div className="promociones-container gap-2 m-5">
-                    {promocion.map((promo) => (
+                    {promocionConStock.map((promo) => (
                         <CardPromocion key={promo.id} promocion={promo} />
                     ))}
                 </div>

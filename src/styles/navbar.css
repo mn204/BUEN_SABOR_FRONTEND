@@ -243,3 +243,17 @@ nav .homeNav {
     display: none !important;
   }
 }
+
+/* Hover personalizado para items del dropdown */
+.dropdown-item:hover,
+.dropdown-item:focus {
+  background-color: #B5ACFF !important;
+  color: #000 !important;
+}
+
+/* Asegurar que los enlaces dentro del dropdown también tengan el mismo hover */
+.dropdown-menu .dropdown-item:hover,
+.dropdown-menu .dropdown-item:focus {
+  background-color: #B5ACFF !important;
+  color: #000 !important;
+}

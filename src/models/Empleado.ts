@@ -8,7 +8,9 @@ export default class Empleado {
     apellido: string = "";
     telefono: string = "";
     fechaNacimiento: Date = new Date();
+    dni: string = "";
     usuario!: Usuario;
     domicilio?: Domicilio;
-    sucursal!: Sucursal;
+    sucursal!: Sucursal
+    eliminado!: boolean;
 }

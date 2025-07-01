@@ -14,6 +14,39 @@ class ArticuloManufacturadoService {
         }
     }
 
+    async getArticuloManufacturadoFiltrados(
+        filtros: {
+            denominacion?: string;
+            categoriaId?: number;
+            eliminado?: boolean;
+            precioMin?: number;
+            precioMax?: number;
+        },
+        page: number = 0,
+        size: number = 10,
+        sort: string = "denominacion,asc"
+    ): Promise<{ content: ArticuloManufacturado[]; totalPages: number; totalElements: number; number: number; size: number }> {
+        const params = new URLSearchParams();
+
+        if (filtros.denominacion) params.append("denominacion", filtros.denominacion);
+        if (filtros.eliminado !== undefined) params.append("eliminado", filtros.eliminado.toString());
+        if (filtros.categoriaId !== undefined) params.append("categoriaId", filtros.categoriaId.toString());
+        if (filtros.precioMin !== undefined) params.append("precioMin", filtros.precioMin.toString());
+        if (filtros.precioMax !== undefined) params.append("precioMax", filtros.precioMax.toString());
+
+        params.append("page", page.toString());
+        params.append("size", size.toString());
+        if (sort) params.append("sort", sort);
+
+        const response = await fetch(`${API_URL}/filtrados?${params.toString()}`);
+
+        if (!response.ok) {
+            throw new Error("Error al obtener artículos manufacturados filtrados");
+        }
+
+        return await response.json();
+    }
+
     async getAllNoElminados(): Promise<ArticuloManufacturado[]> {
         try {
             const res = await fetch(`${API_URL}`);

@@ -4,6 +4,7 @@ import '../../styles/PedidoConfimrado.css';
 import { useParams } from "react-router-dom";
 import PedidoService from '../../services/PedidoService';
 import Pedido from '../../models/Pedido';
+import TipoEnvio from '../../models/enums/TipoEnvio';
 
 
 interface Props {
@@ -116,23 +117,51 @@ const PedidoConfirmado: React.FC<Props> = ({
                                     <React.Fragment key={index}>
                                         {det.articulo && (
                                             <div className="producto-item">
-                                                <div className="producto-info">
+                                                <div className="producto-info d-flex flex-row">
                                                     <span className="producto-nombre">{det.articulo.denominacion}</span>
                                                     <span className="producto-cantidad">x{det.cantidad}</span>
                                                 </div>
                                                 <span className="producto-precio">
-                                                    ${(det.articulo.precioVenta * det.cantidad).toLocaleString()}
+                                                    {pedido?.tipoEnvio === TipoEnvio.TAKEAWAY ? (
+                                                        <>
+                                                            <span style={{ textDecoration: 'line-through', color: '#888', marginRight: 4 }}>
+                                                                ${(det.articulo.precioVenta! * det.cantidad).toLocaleString()}
+                                                            </span>
+                                                            <span style={{ color: '#4CAF50', fontWeight: 600 }}>
+                                                                ${(det.articulo.precioVenta! * det.cantidad * 0.9).toLocaleString()}
+                                                            </span>
+                                                            <span className="descuento-label" style={{ color: '#4CAF50', marginLeft: 6, fontSize: 12 }}>
+                                                                10% OFF Takeaway
+                                                            </span>
+                                                        </>
+                                                    ) : (
+                                                        <>${(det.articulo.precioVenta! * det.cantidad).toLocaleString()}</>
+                                                    )}
                                                 </span>
                                             </div>
                                         )}
                                         {det.promocion && (
                                             <div className="producto-item">
-                                                <div className="producto-info">
+                                                <div className="producto-info d-flex flex-row">
                                                     <span className="producto-nombre">{det.promocion.denominacion}</span>
                                                     <span className="producto-cantidad">x{det.cantidad}</span>
                                                 </div>
                                                 <span className="producto-precio">
-                                                    ${(det.promocion.precioPromocional * det.cantidad).toLocaleString()}
+                                                    {pedido?.tipoEnvio === TipoEnvio.TAKEAWAY ? (
+                                                        <>
+                                                            <span style={{ textDecoration: 'line-through', color: '#888', marginRight: 4 }}>
+                                                                ${(det.promocion.precioPromocional * det.cantidad).toLocaleString()}
+                                                            </span>
+                                                            <span style={{ color: '#4CAF50', fontWeight: 600 }}>
+                                                                ${(det.promocion.precioPromocional * det.cantidad * 0.9).toLocaleString()}
+                                                            </span>
+                                                            <span className="descuento-label" style={{ color: '#4CAF50', marginLeft: 6, fontSize: 12 }}>
+                                                                10% OFF Takeaway
+                                                            </span>
+                                                        </>
+                                                    ) : (
+                                                        <>${(det.promocion.precioPromocional * det.cantidad).toLocaleString()}</>
+                                                    )}
                                                 </span>
                                             </div>
                                         )}
@@ -156,7 +185,7 @@ const PedidoConfirmado: React.FC<Props> = ({
                                             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
                                             <circle cx="12" cy="7" r="4" />
                                         </svg>
-                                        <span>{pedido!.cliente.apellido} {pedido!.cliente.nombre}</span>
+                                        <span>{pedido!.cliente!.apellido} {pedido!.cliente!.nombre}</span>
                                     </div>
                                     <div className="entrega-item">
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -169,7 +198,7 @@ const PedidoConfirmado: React.FC<Props> = ({
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                                             <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
                                         </svg>
-                                        <span>{pedido!.cliente.telefono}</span>
+                                        <span>{pedido!.cliente!.telefono}</span>
                                     </div>
                                     <div className="entrega-item">
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -255,14 +284,6 @@ const PedidoConfirmado: React.FC<Props> = ({
                                 </svg>
                                 Continuar comprando
                             </button>
-                        </div>
-
-                        {/* Mensaje adicional */}
-                        <div className="pedido-confirmado__mensaje">
-                            <p>
-                                Te hemos enviado un email de confirmación con todos los detalles.
-                                Si tienes alguna pregunta, no dudes en contactarnos.
-                            </p>
                         </div>
                     </div>
                 </div>

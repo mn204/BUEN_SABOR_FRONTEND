@@ -107,7 +107,7 @@ function ModalAgregarInsumo({
               <thead>
                 <tr>
                   <th>Denominación</th>
-                  <th>Precio venta</th>
+                  <th>Precio Compra</th>
                   <th>Unidad</th>
                   <th>Categoría</th>
                   <th>Seleccionar</th>
@@ -117,7 +117,7 @@ function ModalAgregarInsumo({
                 {insumosFiltrados.map(insumo => (
                   <tr key={insumo.id}>
                     <td>{insumo.denominacion}</td>
-                    <td>${insumo.precioVenta ?? 0}</td>
+                    <td>${insumo.precioCompra ?? 0}</td>
                     <td>{insumo.unidadMedida?.denominacion}</td>
                     <td>{insumo.categoria?.denominacion}</td>
                     <td>

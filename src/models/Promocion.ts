@@ -5,6 +5,7 @@ import type Sucursal from "./Sucursal";
 export default class Promocion {
     id?: number;
     denominacion: string = "";
+    descuento: number = 0;
     fechaDesde: Date = new Date();
     fechaHasta: Date = new Date();
     horaDesde: string = "";

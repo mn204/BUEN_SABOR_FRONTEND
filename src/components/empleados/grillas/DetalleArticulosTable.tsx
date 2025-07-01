@@ -18,11 +18,12 @@ const DetalleArticulosTable = ({
     <Table responsive bordered hover size="sm">
       <thead>
         <tr>
-          <th className="text-center align-middle" style={{ width: "10%" }}>Imagen</th>
-          <th className="text-center align-middle" style={{ width: "32%" }}>Artículo</th>
-          <th className="text-center align-middle" style={{ width: "23%" }}>Cantidad</th>
-          <th className="text-center align-middle" style={{ width: "20%" }}>Precio Venta</th>
-          <th className="text-center align-middle" style={{ width: "15%" }}>Acciones</th>
+          <th className="text-center align-middle" style={{ width: "8%" }}>Imagen</th>
+          <th className="text-center align-middle" style={{ width: "28%" }}>Articulo</th>
+          <th className="text-center align-middle" style={{ width: "18%" }}>Cantidad</th>
+          <th className="text-center align-middle" style={{ width: "16%" }}>Precio Venta</th>
+          <th className="text-center align-middle" style={{ width: "16%" }}>Precio Total</th>
+          <th className="text-center align-middle" style={{ width: "14%" }}>Acciones</th>
         </tr>
       </thead>
       <tbody>
@@ -62,14 +63,19 @@ const DetalleArticulosTable = ({
                 <Form.Control
                   type="number"
                   size="sm"
-                  min={0}
+                  min={1}
                   step={1}
                   value={det.cantidad}
                   onChange={(e) => {
                     const value = e.target.value;
                     const parsed = parseInt(value, 10);
-                    if (!isNaN(parsed)) {
+                    if (!isNaN(parsed) && parsed >= 0) {
                       onCantidadChange(idx, parsed);
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "-" || e.key === "e") {
+                      e.preventDefault();
                     }
                   }}
                   style={{
@@ -91,6 +97,9 @@ const DetalleArticulosTable = ({
               ${(det.articulo?.precioVenta ?? 0).toFixed(2)}
             </td>
             <td className="text-center align-middle">
+              ${(det.cantidad * (det.articulo?.precioVenta ?? 0)).toFixed(2)}
+            </td>
+            <td className="text-center align-middle">
               <Button
                 variant="outline-danger"
                 size="sm"
@@ -104,8 +113,8 @@ const DetalleArticulosTable = ({
       </tbody>
       <tfoot>
         <tr>
-          <td colSpan={3} className="text-end fw-bold align-middle">
-            Total insumos:
+          <td colSpan={4} className="text-end fw-bold align-middle">
+            Total General:
           </td>
           <td className="text-center fw-bold align-middle">${totalInsumos.toFixed(2)}</td>
           <td />

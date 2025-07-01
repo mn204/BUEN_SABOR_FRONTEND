@@ -14,6 +14,46 @@ class ArticuloInsumoService {
         }
     }
 
+    async filtrar(params: {
+        denominacion?: string;
+        categoriaId?: number | null;
+        unidadMedidaId?: number | null;
+        eliminado?: boolean | null;
+        precioCompraMin?: number | null;
+        precioCompraMax?: number | null;
+        precioVentaMin?: number | null;
+        precioVentaMax?: number | null;
+        page?: number;
+        size?: number;
+        sort?: string; // ejemplo: "denominacion,asc"
+    }): Promise<{
+        content: ArticuloInsumo[];
+        totalPages: number;
+        totalElements: number;
+        number: number;
+        size: number;
+    }> {
+        const searchParams = new URLSearchParams();
+
+        if (params.denominacion) searchParams.append("denominacion", params.denominacion);
+        if (params.categoriaId != null) searchParams.append("categoriaId", params.categoriaId.toString());
+        if (params.unidadMedidaId != null) searchParams.append("unidadMedidaId", params.unidadMedidaId.toString());
+        if (params.eliminado != null) searchParams.append("eliminado", params.eliminado.toString());
+        if (params.precioCompraMin != null) searchParams.append("precioCompraMin", params.precioCompraMin.toString());
+        if (params.precioCompraMax != null) searchParams.append("precioCompraMax", params.precioCompraMax.toString());
+        if (params.precioVentaMin != null) searchParams.append("precioVentaMin", params.precioVentaMin.toString());
+        if (params.precioVentaMax != null) searchParams.append("precioVentaMax", params.precioVentaMax.toString());
+        if (params.page != null) searchParams.append("page", params.page.toString());
+        if (params.size != null) searchParams.append("size", params.size.toString());
+        if (params.sort) searchParams.append("sort", params.sort);
+
+        const response = await fetch(`${API_URL}/filtrados?${searchParams.toString()}`);
+        if (!response.ok) {
+            throw new Error('Error al filtrar los insumos');
+        }
+        return await response.json();
+    }
+
     async getAllNoParaElaborar(): Promise<ArticuloInsumo[]> {
         try {
             const res = await fetch(`${API_URL}/no-para-elaborar`);

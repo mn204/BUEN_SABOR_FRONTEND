@@ -4,14 +4,14 @@
   border: 1px solid #ccc;
   border-radius: 10px;
   height: fit-content;
-  padding: 10px;
+  padding: 5px;
   margin: 5px 0;
   box-sizing: border-box;
   color: #000;
 }
 
 .formArticuloManufacturado{
-  margin: 70px;
+  margin: 20px;
 }
 
 .formArticuloManufacturado form{

@@ -1,4 +1,5 @@
 import  Empleado  from "../models/Empleado";
+import Usuario from "../models/Usuario.ts";
 
 const API_URL = "http://localhost:8080/api/empleado";
 
@@ -41,6 +42,17 @@ export const obtenerEmpleadoPorUsuarioId = async (usuarioId: number) => {
     return response.json();
 };
 
+export const obtenerEmpleadoPorDni = async (dni: string): Promise<Empleado | null> => {
+    try {
+        const response = await fetch(`${API_URL}/dni/${dni}`);
+        if (!response.ok) return null;
+        return await response.json();
+    } catch (error) {
+        console.error("Error al verificar DNI:", error);
+        return null;
+    }
+};
+
 // Obtener empleado por ID
 export const obtenerEmpleadoPorId = async (id: number) => {
     const response = await fetch(`${API_URL}/${id}`);
@@ -76,7 +88,7 @@ export const actualizarEmpleado = async (id: number, empleado: Empleado): Promis
 
 //eliminar empleado
 export const eliminarEmpleado = async (id: number): Promise<void> => {
-    const response = await fetch(`${API_URL}/${id}`, {
+    const response = await fetch(`${API_URL}/eliminar/${id}`, {
         method: "DELETE",
     });
     if (!response.ok) {
@@ -86,7 +98,7 @@ export const eliminarEmpleado = async (id: number): Promise<void> => {
 
 //dar de alta empleado eliminado
 export const darDeAltaEmpleado = async (id: number): Promise<void> => {
-    const response = await fetch(`${API_URL}/darAlta/${id}`, {
+    const response = await fetch(`${API_URL}/darAltaEmpleado/${id}`, {
         method: "PUT",
     });
     if (!response.ok) {

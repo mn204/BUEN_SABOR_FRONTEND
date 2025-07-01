@@ -10,6 +10,7 @@ import { useSucursal } from "../../../context/SucursalContextEmpleado.tsx";
 import { obtenerSucursales } from "../../../services/SucursalService.ts";
 import type Sucursal from "../../../models/Sucursal.ts";
 import DeliveryModal from "../modales/DeliveryModal.tsx";
+import ModalMensaje from "../modales/ModalMensaje";
 import dayjs from "dayjs";
 
 const GrillaDelivery: React.FC = () => {
@@ -26,6 +27,12 @@ const GrillaDelivery: React.FC = () => {
     const [pedidoSeleccionado, setPedidoSeleccionado] = useState<Pedido | null>(null);
     const [showModal, setShowModal] = useState(false);
 
+    const [modalMensaje, setModalMensaje] = useState({
+        show: false,
+        mensaje: "",
+        titulo: "Mensaje",
+        variante: "danger" as "primary" | "success" | "danger" | "warning" | "info" | "secondary"
+    });
 
     // Filtros para admin
     const [filtros, setFiltros] = useState({
@@ -44,6 +51,10 @@ const GrillaDelivery: React.FC = () => {
         } catch (error) {
             console.error("Error al agregar 5 minutos:", error);
         }
+    };
+
+    const mostrarModalMensaje = (mensaje: string, variante: typeof modalMensaje.variante = "danger", titulo = "Error") => {
+        setModalMensaje({ show: true, mensaje, variante, titulo });
     };
 
     const fetchPedidos = async () => {
@@ -72,8 +83,9 @@ const GrillaDelivery: React.FC = () => {
                 return;
             }
 
+            // ✅ CORRECCIÓN: Cambiar 'estado' por 'estados' y usar array de strings
             const filtrosAPI = {
-                estado: Estado.EN_DELIVERY,
+                estados: [Estado.EN_DELIVERY] as string[], // Asegurar que sea array de strings
                 idEmpleado: idEmpleado
             };
 
@@ -97,7 +109,7 @@ const GrillaDelivery: React.FC = () => {
             setTotalPages(result.totalPages);
         } catch (error) {
             console.error("Error al obtener pedidos en delivery:", error);
-            alert("Error al obtener pedidos en delivery");
+            mostrarModalMensaje("Error al obtener pedidos en delivery", "danger", "Error");
         } finally {
             setLoading(false);
         }
@@ -134,7 +146,7 @@ const GrillaDelivery: React.FC = () => {
             setPedidoSeleccionado(pedido);
             setShowModal(true);
         } catch (error) {
-            alert("No se pudo obtener el detalle del pedido");
+            mostrarModalMensaje("No se pudo obtener el detalle del pedido", "danger", "Error");
         }
     };
 
@@ -389,6 +401,13 @@ const GrillaDelivery: React.FC = () => {
                     fetchPedidos(); // Refrescar lista después de entregar
                 }}
                 pedido={pedidoSeleccionado}
+            />
+            <ModalMensaje
+                show={modalMensaje.show}
+                onHide={() => setModalMensaje({ ...modalMensaje, show: false })}
+                mensaje={modalMensaje.mensaje}
+                titulo={modalMensaje.titulo}
+                variante={modalMensaje.variante}
             />
 
         </div>

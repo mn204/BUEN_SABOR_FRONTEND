@@ -43,17 +43,7 @@ export function useManufacturado() {
         setDetalles(art.detalles ?? []);
         setImagenesExistentes(art.imagenes ?? []);
         setEliminado(art.eliminado ?? false);
-        // Calcular costo total de insumos
-        const costoInsumos = (art.detalles ?? []).reduce((acc, det) => {
-          const precio = det.articuloInsumo?.precioVenta ?? 0;
-          return acc + precio * det.cantidad;
-        }, 0);
-        // Calcular porcentaje de ganancia si hay costo
-        if (costoInsumos > 0 && art.precioVenta) {
-          setPorcentajeGanancia(((art.precioVenta - costoInsumos) / costoInsumos) * 100);
-        } else {
-          setPorcentajeGanancia(0);
-        }
+        setPorcentajeGanancia(art.ganancia ?? 0)
       });
     }
   }, [idFromUrl]);

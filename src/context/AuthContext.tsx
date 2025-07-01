@@ -7,7 +7,7 @@ import Usuario from '../models/Usuario';
 import Cliente from '../models/Cliente';
 import Empleado from '../models/Empleado';
 import Rol from '../models/enums/Rol';
-import { obtenerUsuarioPorFirebaseUid } from '../services/UsuarioService';
+import { obtenerUsuarioPorFirebaseUid, obtenerUsuarioPorEmail } from '../services/UsuarioService';
 import { obtenerClientePorUsuarioId } from '../services/ClienteService';
 import { obtenerEmpleadoPorUsuarioId } from '../services/EmpleadoService';
 
@@ -20,7 +20,10 @@ interface AuthContextType {
     setEmpleado: (empleado: Empleado | null) => void;
     loading: boolean;
     requiresGoogleRegistration: boolean;
+    isOfflineMode: boolean;
+    setIsOfflineMode: (offline: boolean) => void;
     login: (email: string, password: string) => Promise<void>;
+    loginOffline: (email: string) => Promise<void>;
     logout: () => Promise<void>;
     completeGoogleRegistration: () => void;
     isAuthenticated: boolean;
@@ -33,7 +36,6 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 interface AuthProviderProps {
     children: ReactNode;
 }
-
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const [user, setUser] = useState<User | null>(null);
     const [usuario, setUsuario] = useState<Usuario | null>(null);
@@ -41,12 +43,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const [empleado, setEmpleado] = useState<Empleado | null>(null);
     const [loading, setLoading] = useState(true);
     const [requiresGoogleRegistration, setRequiresGoogleRegistration] = useState(false);
+    const [isOfflineMode, setIsOfflineMode] = useState(false);
 
     // Función para cargar datos del usuario desde el backend
     const loadUserData = async (firebaseUser: User) => {
         try {
             setLoading(true);
-            // Obtener datos del usuario desde el backend
             const usuarioData = await obtenerUsuarioPorFirebaseUid(firebaseUser.uid);
 
             if (!usuarioData || !usuarioData.id) {
@@ -65,7 +67,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             }
             setUsuario(usuarioData);
 
-
             // Dependiendo del rol, cargar datos específicos
             if (usuarioData.rol === Rol.CLIENTE) {
                 try {
@@ -77,7 +78,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                     console.error('Error al cargar datos del cliente:', error);
                 }
             } else {
-                // Es un empleado (ADMIN, CAJERO, COCINERO, DELIVERY)
                 try {
                     const empleadoData = await obtenerEmpleadoPorUsuarioId(usuarioData.id);
                     setEmpleado(empleadoData);
@@ -90,7 +90,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         } catch (error) {
             console.error('Error al cargar datos del usuario:', error);
 
-            // Si es un usuario de Google que no está en el backend, requerir registro
             if (firebaseUser.providerData[0]?.providerId === 'google.com') {
                 console.log('Usuario de Google nuevo, requiere registro completo');
                 setRequiresGoogleRegistration(true);
@@ -98,7 +97,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 setCliente(null);
                 setEmpleado(null);
             } else {
-                // Si hay error con usuario normal, limpiar todos los datos
                 setUsuario(null);
                 setCliente(null);
                 setEmpleado(null);
@@ -107,9 +105,54 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             setLoading(false);
         }
     };
+    const loadUserDataOffline = async (email: string) => {
+        try {
+            setLoading(true);
+            // Buscar usuario por email directamente en la base de datos local
+            const usuarioData = await obtenerUsuarioPorEmail(email);
 
+            if (!usuarioData || !usuarioData.id) {
+                throw new Error('Usuario no encontrado en la base de datos local');
+            }
+
+            if (usuarioData.eliminado) {
+                throw new Error('Usuario inactivo');
+            }
+
+            setUsuario(usuarioData);
+
+            // Cargar datos específicos según el rol
+            if (usuarioData.rol === Rol.CLIENTE) {
+                try {
+                    const clienteData = await obtenerClientePorUsuarioId(usuarioData.id);
+                    setCliente(clienteData);
+                    setEmpleado(null);
+                } catch (error) {
+                    console.error('Error al cargar datos del cliente:', error);
+                }
+            } else {
+                try {
+                    const empleadoData = await obtenerEmpleadoPorUsuarioId(usuarioData.id);
+                    setEmpleado(empleadoData);
+                    setCliente(null);
+                } catch (error) {
+                    console.error('Error al cargar datos del empleado:', error);
+                }
+            }
+        } catch (error) {
+            console.error('Error al cargar datos del usuario offline:', error);
+            throw error;
+        } finally {
+            setLoading(false);
+        }
+    };
     // Escuchar cambios en el estado de autenticación de Firebase
     useEffect(() => {
+        if (isOfflineMode) {
+            setLoading(false);
+            return;
+        }
+
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
             setUser(firebaseUser);
 
@@ -125,7 +168,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         });
 
         return () => unsubscribe();
-    }, []);
+    }, [isOfflineMode]);
 
     const login = async (email: string, password: string) => {
         const credential = await signInWithEmailAndPassword(auth, email, password);
@@ -154,10 +197,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             setCliente(null);
         }
     };
+    const loginOffline = async (email: string) => {
+        // Crear un objeto user simulado para modo offline
+        const mockUser = {
+            uid: `offline_${email}`,
+            email: email,
+            displayName: null,
+            emailVerified: true,
+        } as User;
 
+        setUser(mockUser);
+        await loadUserDataOffline(email);
+    };
 
     const logout = async () => {
-        await signOut(auth);
+        if (!isOfflineMode) {
+            await signOut(auth);
+        }
+        setUser(null);
         setUsuario(null);
         setCliente(null);
         setEmpleado(null);
@@ -167,7 +224,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const completeGoogleRegistration = () => {
         setRequiresGoogleRegistration(false);
         // Recargar datos después del registro
-        if (user) {
+        if (user  && !isOfflineMode) {
             loadUserData(user);
         }
     };
@@ -201,7 +258,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setEmpleado,
         loading,
         requiresGoogleRegistration,
+        isOfflineMode,
+        setIsOfflineMode,
         login,
+        loginOffline,
         logout,
         completeGoogleRegistration,
         isAuthenticated: !!user,

@@ -16,15 +16,38 @@ import type Sucursal from "../../../models/Sucursal.ts";
 import SelectDeliveryModal from '../modales/ModalDeliverySeleccion.tsx';
 import Empleado from '../../../models/Empleado.ts';
 import Rol from '../../../models/enums/Rol.ts';
-import dayjs from 'dayjs';
+import { es } from 'date-fns/locale';
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
+import ModalMensaje from "../modales/ModalMensaje";
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 interface Props {
     cliente?: Cliente;
+}
+
+function ajustarFechaHasta(date: Date | null): Date | null {
+    if (!date) return null;
+    // Si la hora es 00:00:00, setea a 23:59:59.999
+    if (
+        date.getHours() === 0 &&
+        date.getMinutes() === 0 &&
+        date.getSeconds() === 0 &&
+        date.getMilliseconds() === 0
+    ) {
+        const finDia = new Date(date);
+        finDia.setHours(23, 59, 59, 999);
+        return finDia;
+    }
+    return date;
 }
 
 const GrillaPedidos: React.FC<Props> = ({ cliente }) => {
     const [loadingEstados, setLoadingEstados] = useState<Record<number, boolean>>({});
     const { sucursalActual, sucursalIdSeleccionada } = useSucursal();
-    const { empleado, usuario } = useAuth();
+    const { usuario } = useAuth();
 
     const getColorEstado = (estado: Estado): string => {
         switch (estado) {
@@ -54,17 +77,20 @@ const GrillaPedidos: React.FC<Props> = ({ cliente }) => {
 
     // Estados para exportación a Excel (solo admin)
     const [pedidosSeleccionados, setPedidosSeleccionados] = useState<Map<number, Pedido>>(new Map());
-    const [modoSeleccion, setModoSeleccion] = useState(false);
+    const [modoSeleccion] = useState(false);
 
     const [filtros, setFiltros] = useState({
         sucursalId: "",
-        estado: "",
+        estados: [Estado.PENDIENTE, Estado.LISTO] as Estado[],
         desde: null as Date | null,
         hasta: null as Date | null,
-        idPedido: undefined as number | undefined,
+        idPedido: "" as string,
         clienteNombre: "",
-        pagado: ""
+        pagado: "",
+        tipoEnvio: ""
     });
+    const [sortDesc, setSortDesc] = useState(true);
+
 
     const fetchPedidos = async () => {
         const sucursalId = usuario?.rol === 'ADMINISTRADOR' && filtros.sucursalId
@@ -73,13 +99,16 @@ const GrillaPedidos: React.FC<Props> = ({ cliente }) => {
 
         try {
             setLoading(true);
-            const filtrosConvertidos = {
-                estado: filtros.estado || undefined,
-                clienteNombre: cliente ? `${cliente.nombre} ${cliente.apellido}` : (filtros.clienteNombre || undefined),
-                fechaDesde: filtros.desde ? filtros.desde.toISOString() : undefined,
-                fechaHasta: filtros.hasta ? filtros.hasta.toISOString() : undefined,
-                pagado: filtros.pagado === "" ? undefined : filtros.pagado === "true"
+            const filtrosConvertidos: any = {
+                estados: filtros.estados && filtros.estados.length > 0 ? filtros.estados : undefined, clienteNombre: cliente ? `${cliente.nombre} ${cliente.apellido}` : (filtros.clienteNombre || undefined),
+                fechaDesde: filtros.desde ? dayjs(filtros.desde).tz("America/Argentina/Buenos_Aires").format() : undefined,
+                fechaHasta: filtros.hasta ? dayjs(ajustarFechaHasta(filtros.hasta)!).tz("America/Argentina/Buenos_Aires").format() : undefined,
+                pagado: filtros.pagado === "" ? undefined : filtros.pagado === "true",
+                tipoEnvio: filtros.tipoEnvio || undefined,
+                idPedido: filtros.idPedido ? Number(filtros.idPedido) : undefined
             };
+
+            const sortParam = `fechaPedido,${sortDesc ? "DESC" : "ASC"}`;
 
             // Agregamos el parámetro de orden descendente por fecha
             const result = await pedidoService.getPedidosFiltrados(
@@ -87,12 +116,13 @@ const GrillaPedidos: React.FC<Props> = ({ cliente }) => {
                 filtrosConvertidos,
                 page,
                 size,
+                sortParam
             );
             setPedidos(result.content);
             setTotalPages(result.totalPages);
         } catch (error) {
             console.error("Error al obtener pedidos:", error);
-            alert("Error al obtener pedidos");
+            mostrarModalMensaje("Error al obtener pedidos", "danger", "Error");
         } finally {
             setLoading(false);
         }
@@ -116,11 +146,10 @@ const GrillaPedidos: React.FC<Props> = ({ cliente }) => {
     }, [usuario]);
 
     useEffect(() => {
-        // Los empleados regulares necesitan sucursal, los admin pueden ver todas
         if (usuario?.rol === 'ADMINISTRADOR' || sucursalActual?.id) {
             fetchPedidos();
         }
-    }, [page, sucursalIdSeleccionada, filtros.estado, filtros.desde, filtros.hasta, filtros.idPedido, filtros.clienteNombre, filtros.sucursalId, filtros.pagado]);
+    }, [page, sucursalIdSeleccionada, filtros.estados, filtros.desde, filtros.hasta, filtros.idPedido, filtros.clienteNombre, filtros.sucursalId, filtros.pagado, filtros.tipoEnvio, sortDesc]);
 
     const handleVerDetalle = async (pedidoId: number) => {
         try {
@@ -139,7 +168,7 @@ const GrillaPedidos: React.FC<Props> = ({ cliente }) => {
             setShowDetalleModal(true);
         } catch (error) {
             console.error("Error al obtener detalle:", error);
-            alert("Error al obtener detalle del pedido");
+            mostrarModalMensaje("Error al obtener detalle del pedido", "danger", "Error");
         }
     };
 
@@ -147,6 +176,16 @@ const GrillaPedidos: React.FC<Props> = ({ cliente }) => {
         const pedido = pedidos.find(p => p.id === pedidoId);
         if (!pedido) return;
 
+        // Validación frontend: no permitir EN_DELIVERY si es TAKEAWAY
+        if (nuevoEstado === Estado.EN_DELIVERY && pedido.tipoEnvio === "TAKEAWAY") {
+            mostrarModalMensaje("No se puede cambiar a EN_DELIVERY un pedido con tipo de envío TAKEAWAY.", "warning", "Advertencia");
+            return;
+        }
+        // Validación frontend: no permitir ENTREGADO si no está pagado
+        if (nuevoEstado === Estado.ENTREGADO && !pedido.pagado) {
+            mostrarModalMensaje("No se puede marcar como ENTREGADO un pedido que no está pagado.", "warning", "Advertencia");
+            return;
+        }
         // Verificar si el cambio es a EN_DELIVERY
         if (nuevoEstado === Estado.EN_DELIVERY) {
             // Para ADMIN: puede cambiar desde cualquier estado
@@ -171,12 +210,18 @@ const GrillaPedidos: React.FC<Props> = ({ cliente }) => {
                     setPedidoEnProceso(pedido);
                     setShowDeliveryModal(true);
                 } catch (error: any) {
-                    console.error('Error al cargar empleados delivery:', error);
-                    alert(error.message || 'Error al cargar lista de deliverys disponibles');
+                    let mensaje = "Error al cambiar el estado del pedido";
+                    if (error?.response && error.response.data?.errorMsg) {
+                        mensaje = error.response.data.errorMsg;
+                    } else if (error?.message) {
+                        mensaje = error.message;
+                    }
+                    mostrarModalMensaje(mensaje, "danger", "Error");
+                    console.error('Error al cambiar estado:', error);
                 }
                 return;
             } else {
-                alert('No tienes permisos para cambiar a estado EN_DELIVERY desde este estado');
+                mostrarModalMensaje('No tienes permisos para cambiar a estado EN_DELIVERY desde este estado', "warning", "Advertencia");
                 return;
             }
         }
@@ -202,7 +247,7 @@ const GrillaPedidos: React.FC<Props> = ({ cliente }) => {
 
         } catch (error) {
             console.error('Error al cambiar estado:', error);
-            alert('Error al cambiar el estado del pedido');
+            mostrarModalMensaje('Error al cambiar el estado del pedido', "danger", "Error");
         } finally {
             setLoadingEstados(prev => ({
                 ...prev,
@@ -239,9 +284,15 @@ const GrillaPedidos: React.FC<Props> = ({ cliente }) => {
             setShowDeliveryModal(false);
             setPedidoEnProceso(null);
 
-        } catch (error) {
-            console.error('Error al asignar delivery:', error);
-            alert('Error al asignar el delivery al pedido');
+        } catch (error: any) {
+            let mensaje = "Error al cambiar el estado del pedido";
+            if (error?.response && error.response.data?.errorMsg) {
+                mensaje = error.response.data.errorMsg;
+            } else if (error?.message) {
+                mensaje = error.message;
+            }
+            mostrarModalMensaje(mensaje, "danger", "Error");
+            console.error('Error al cambiar estado:', error);
         } finally {
             setLoadingEstados(prev => ({
                 ...prev,
@@ -263,7 +314,7 @@ const GrillaPedidos: React.FC<Props> = ({ cliente }) => {
             );
         } catch (error) {
             console.error("Error al marcar como pagado:", error);
-            alert("Error al marcar el pedido como pagado");
+            mostrarModalMensaje("Error al marcar el pedido como pagado", "danger", "Error");
         }
     };
 
@@ -290,7 +341,7 @@ const GrillaPedidos: React.FC<Props> = ({ cliente }) => {
             window.URL.revokeObjectURL(url);
         } catch (error) {
             console.error("Error al descargar factura:", error);
-            alert("Error al descargar la factura");
+            mostrarModalMensaje("Error al descargar la factura", "danger", "Error");
         }
     };
 
@@ -298,12 +349,13 @@ const GrillaPedidos: React.FC<Props> = ({ cliente }) => {
     const handleVerTodos = () => {
         setFiltros({
             sucursalId: "",
-            estado: "",
+            estados: [],
             desde: null,
             hasta: null,
-            idPedido: undefined,
+            idPedido: "",
             clienteNombre: "",
-            pagado: ""
+            pagado: "",
+            tipoEnvio: ""
         });
         setPage(0);
     };
@@ -324,28 +376,6 @@ const GrillaPedidos: React.FC<Props> = ({ cliente }) => {
         });
     };
 
-    /*
-    const handleSeleccionarTodos = () => {
-        const pedidosActualesSeleccionados = pedidos.filter(p => pedidosSeleccionados.has(p.id!));
-
-        if (pedidosActualesSeleccionados.length === pedidos.length) {
-            // Deseleccionar todos los de esta página
-            setPedidosSeleccionados(prev => {
-                const newMap = new Map(prev);
-                pedidos.forEach(p => newMap.delete(p.id!));
-                return newMap;
-            });
-        } else {
-            // Seleccionar todos los de esta página
-            setPedidosSeleccionados(prev => {
-                const newMap = new Map(prev);
-                pedidos.forEach(p => newMap.set(p.id!, p));
-                return newMap;
-            });
-        }
-    };
-    */
-
     const handleExportarExcel = async () => {
         try {
             setLoading(true);
@@ -355,11 +385,15 @@ const GrillaPedidos: React.FC<Props> = ({ cliente }) => {
                 : sucursalIdSeleccionada;
 
             const filtrosConvertidos = {
-                estado: filtros.estado || undefined,
+                estados: filtros.estados && filtros.estados.length > 0 ? filtros.estados : undefined,
                 clienteNombre: cliente ? `${cliente.nombre} ${cliente.apellido}` : (filtros.clienteNombre || undefined),
-                fechaDesde: filtros.desde ? filtros.desde.toISOString() : undefined,
-                fechaHasta: filtros.hasta ? filtros.hasta.toISOString() : undefined,
-                pagado: filtros.pagado === "" ? undefined : filtros.pagado === "true"
+                fechaDesde: filtros.desde ? dayjs(filtros.desde).tz("America/Argentina/Buenos_Aires").format() : undefined,
+                fechaHasta: filtros.hasta ? dayjs(ajustarFechaHasta(filtros.hasta)!).tz("America/Argentina/Buenos_Aires").format() : undefined,
+                pagado: filtros.pagado === "" ? undefined : filtros.pagado === "true",
+                tipoEnvio: filtros.tipoEnvio === "DELIVERY" || filtros.tipoEnvio === "TAKEAWAY"
+                    ? filtros.tipoEnvio as "DELIVERY" | "TAKEAWAY"
+                    : undefined,
+                idPedido: filtros.idPedido ? Number(filtros.idPedido) : undefined
             };
 
             // Llama a un método que exporte todos los pedidos filtrados (sin paginación)
@@ -373,10 +407,10 @@ const GrillaPedidos: React.FC<Props> = ({ cliente }) => {
             a.download = "pedidos.xlsx";
             a.click();
             window.URL.revokeObjectURL(url);
-            alert("Exportando pedidos filtrados a Excel...");
+            mostrarModalMensaje("Exportando pedidos filtrados a Excel...", "success", "Éxito");
         } catch (error) {
             console.error("Error al exportar Excel:", error);
-            alert("Error al exportar a Excel");
+            mostrarModalMensaje("Error al exportar a Excel", "danger", "Error");
         } finally {
             setLoading(false);
         }
@@ -388,29 +422,50 @@ const GrillaPedidos: React.FC<Props> = ({ cliente }) => {
         setModoSeleccion(false);
     };
     */
-    const getEstadosDisponibles = (estadoActual: Estado): Estado[] => {
+    const getEstadosDisponibles = (estadoActual: Estado, pedido: Pedido): Estado[] => {
+        let disponibles = Object.values(Estado);
+
+        // No permitir EN_DELIVERY si es TAKEAWAY
+        const filtrarEnDelivery = (arr: Estado[]) =>
+            pedido.tipoEnvio === "TAKEAWAY" ? arr.filter(e => e !== Estado.EN_DELIVERY) : arr;
+        // No permitir ENTREGADO si no está pagado
+        const filtrarEntregado = (arr: Estado[]) =>
+            !pedido.pagado ? arr.filter(e => e !== Estado.ENTREGADO) : arr;
+
         if (usuario?.rol === 'ADMINISTRADOR') {
-            return Object.values(Estado);
+            disponibles = filtrarEnDelivery(disponibles);
+            disponibles = filtrarEntregado(disponibles);
+            return disponibles;
         }
 
         if (usuario?.rol === 'CAJERO') {
+            let arr: Estado[] = [];
             switch (estadoActual) {
                 case Estado.PENDIENTE:
-                    return [Estado.PENDIENTE, Estado.CANCELADO, Estado.PREPARACION, Estado.LISTO, Estado.EN_DELIVERY, Estado.ENTREGADO];
+                    arr = [Estado.PENDIENTE, Estado.CANCELADO, Estado.PREPARACION, Estado.LISTO, Estado.EN_DELIVERY, Estado.ENTREGADO];
+                    break;
                 case Estado.PREPARACION:
-                    return [Estado.PREPARACION, Estado.LISTO];
+                    arr = [Estado.PREPARACION, Estado.LISTO];
+                    break;
                 case Estado.LISTO:
-                    return [Estado.LISTO, Estado.EN_DELIVERY, Estado.ENTREGADO];
+                    arr = [Estado.LISTO, Estado.EN_DELIVERY, Estado.ENTREGADO];
+                    break;
                 case Estado.EN_DELIVERY:
-                    return [Estado.EN_DELIVERY, Estado.ENTREGADO];
+                    arr = [Estado.EN_DELIVERY, Estado.ENTREGADO];
+                    break;
                 case Estado.ENTREGADO:
                 case Estado.CANCELADO:
                 default:
-                    return [estadoActual]; // Solo puede ver el estado actual
+                    arr = [estadoActual];
             }
+            arr = filtrarEnDelivery(arr);
+            arr = filtrarEntregado(arr);
+            return arr;
         }
 
-        return [estadoActual]; // Por defecto, solo el estado actual
+        disponibles = filtrarEnDelivery(disponibles);
+        disponibles = filtrarEntregado(disponibles);
+        return disponibles.filter(e => e === estadoActual);
     };
     const isBotonCambioDeshabilitado = (estadoActual: Estado): boolean => {
         if (usuario?.rol === 'ADMINISTRADOR') {
@@ -449,7 +504,9 @@ const GrillaPedidos: React.FC<Props> = ({ cliente }) => {
             key: "acciones",
             label: "Acciones",
             render: (_: any, row: Pedido) => {
-                const estadosDisponibles = getEstadosDisponibles(row.estado);
+
+                const estadosDisponibles = getEstadosDisponibles(row.estado, row);
+                const estadoSeleccionadoValido = estadosDisponibles.includes(estadoSeleccionado[row.id!] || row.estado);
                 const botonDeshabilitado = isBotonCambioDeshabilitado(row.estado);
                 const isLoadingEstado = loadingEstados[row.id!] || false;
                 return (
@@ -460,7 +517,7 @@ const GrillaPedidos: React.FC<Props> = ({ cliente }) => {
                                 className={`border-${getColorEstado(row.estado)}`}
                                 value={estadoSeleccionado[row.id!] || row.estado}
                                 onChange={(e) => setEstadoSeleccionado({ ...estadoSeleccionado, [row.id!]: e.target.value as Estado })}
-                                disabled={botonDeshabilitado || isLoadingEstado}
+                                disabled={botonDeshabilitado || !estadoSeleccionadoValido || estadoSeleccionado[row.id!] === row.estado || isLoadingEstado}
                             >
                                 {estadosDisponibles.map((estado) => (
                                     <option key={estado} value={estado}>{estado}</option>
@@ -497,9 +554,20 @@ const GrillaPedidos: React.FC<Props> = ({ cliente }) => {
         }
     ];
 
+    const [modalMensaje, setModalMensaje] = useState({
+        show: false,
+        mensaje: "",
+        titulo: "Mensaje",
+        variante: "danger" as "primary" | "success" | "danger" | "warning" | "info" | "secondary"
+    });
+    const mostrarModalMensaje = (mensaje: string, variante: typeof modalMensaje.variante = "danger", titulo = "Error") => {
+        setModalMensaje({ show: true, mensaje, variante, titulo });
+    };
+
     return (
         <>
-            <Card>
+            {/* Caja de filtros y gestión */}
+            <Card className="mb-4 shadow-sm">
                 <Card.Header>
                     <div className="d-flex justify-content-between align-items-center">
                         <Card.Title className="mb-0">
@@ -519,66 +587,147 @@ const GrillaPedidos: React.FC<Props> = ({ cliente }) => {
                     </div>
                 </Card.Header>
                 <Card.Body>
-                    <Form className="mb-3">
-                        <Row>
-                            {!cliente && (
-                                <Col>
+                    <Form className="mb-0"> {/* Quitamos mb-5 para que no haya tanto espacio */}
+                        <Row className="gy-2 align-items-center">
+                            <Col xs={12} md={8} lg={9} className="d-flex flex-wrap align-items-center gap-3">
+                                <div>
+                                    <Form.Label className="fw-bold mb-0 me-2">Estados</Form.Label>
+                                    <div className="d-inline-flex flex-wrap gap-2 align-items-center">
+                                        {Object.values(Estado).map((est) => (
+                                            <Form.Check
+                                                key={est}
+                                                type="checkbox"
+                                                id={`estado-${est}`}
+                                                label={<span style={{ fontSize: "0.85em" }}>{est}</span>}
+                                                value={est}
+                                                checked={filtros.estados.includes(est)}
+                                                onChange={(e) => {
+                                                    const checked = e.target.checked;
+                                                    setFiltros((prev) => ({
+                                                        ...prev,
+                                                        estados: checked
+                                                            ? [...prev.estados, est]
+                                                            : prev.estados.filter((estado) => estado !== est)
+                                                    }));
+                                                }}
+                                                className="mb-0"
+                                                style={{ minWidth: "auto" }}
+                                            />
+                                        ))}
+                                    </div>
+                                </div>
+                                {!cliente && (
+                                    <div>
+                                        <Form.Label className="fw-bold mb-0 me-2">Cliente</Form.Label>
+                                        <Form.Control
+                                            size="sm"
+                                            style={{ width: 140, display: "inline-block" }}
+                                            placeholder="Nombre del Cliente"
+                                            value={filtros.clienteNombre}
+                                            onChange={(e) => setFiltros({ ...filtros, clienteNombre: e.target.value })}
+                                        />
+                                    </div>
+                                )}
+                                <div>
+                                    <Form.Label className="fw-bold mb-0 me-2">ID</Form.Label>
                                     <Form.Control
-                                        placeholder="Cliente"
-                                        value={filtros.clienteNombre}
-                                        onChange={(e) => setFiltros({ ...filtros, clienteNombre: e.target.value })}
+                                        size="sm"
+                                        type="number"
+                                        style={{ width: 90, display: "inline-block" }}
+                                        placeholder="ID Pedido"
+                                        value={filtros.idPedido}
+                                        onChange={(e) => setFiltros({ ...filtros, idPedido: e.target.value })}
                                     />
-                                </Col>
-                            )}
-                            <Col>
-                                <Form.Select value={filtros.estado} onChange={(e) => setFiltros({ ...filtros, estado: e.target.value })}>
-                                    <option value="">Estados</option>
-                                    {Object.values(Estado).map((est) => (
-                                        <option key={est} value={est}>{est}</option>
-                                    ))}
-                                </Form.Select>
+                                </div>
+                                <div>
+                                    <Form.Label className="fw-bold mb-0 me-2">Envío</Form.Label>
+                                    <Form.Select
+                                        size="sm"
+                                        style={{ width: 120, display: "inline-block" }}
+                                        value={filtros.tipoEnvio}
+                                        onChange={(e) => setFiltros({ ...filtros, tipoEnvio: e.target.value })}
+                                    >
+                                        <option value="">Todos</option>
+                                        <option value="DELIVERY">Delivery</option>
+                                        <option value="TAKEAWAY">Take Away</option>
+                                    </Form.Select>
+                                </div>
+                                <div>
+                                    <Form.Label className="fw-bold mb-0 me-2">Pagado</Form.Label>
+                                    <Form.Select
+                                        size="sm"
+                                        style={{ width: 120, display: "inline-block" }}
+                                        value={filtros.pagado}
+                                        onChange={(e) => setFiltros({ ...filtros, pagado: e.target.value })}
+                                    >
+                                        <option value="">Todos</option>
+                                        <option value="true">SI</option>
+                                        <option value="false">NO</option>
+                                    </Form.Select>
+                                </div>
+                                <div className="d-flex align-items-end">
+                                    <div>
+                                        <Form.Label className="fw-bold mb-0 me-2">Fecha Desde</Form.Label>
+                                        <DatePicker
+                                            className="form-control form-control-sm d-inline-block"
+                                            placeholderText="Desde"
+                                            selected={filtros.desde}
+                                            onChange={(date) => {
+                                                setFiltros({ ...filtros, desde: date, hasta: filtros.hasta && date && filtros.hasta < date ? null : filtros.hasta });
+                                            }}
+                                            showTimeSelect
+                                            dateFormat="dd/MM/yyyy HH:mm"
+                                            locale={es}
+                                            maxDate={filtros.hasta || undefined}
+                                            isClearable
+                                        />
+                                    </div>
+                                    <div className="ms-2">
+                                        <Form.Label className="fw-bold mb-0 me-2">Fecha Hasta</Form.Label>
+                                        <DatePicker
+                                            className="form-control form-control-sm d-inline-block"
+                                            placeholderText="Hasta"
+                                            selected={filtros.hasta}
+                                            onChange={(date) => setFiltros({ ...filtros, hasta: date })}
+                                            showTimeSelect
+                                            dateFormat="dd/MM/yyyy HH:mm"
+                                            locale={es}
+                                            minDate={filtros.desde || undefined}
+                                            isClearable
+                                        />
+                                    </div>
+                                </div>
                             </Col>
-                            <Col>
-                                <DatePicker
-                                    className="form-control"
-                                    placeholderText="Desde"
-                                    selected={filtros.desde}
-                                    onChange={(date) => setFiltros({ ...filtros, desde: date })}
-                                    showTimeSelect
-                                    dateFormat="Pp"
-                                />
-                            </Col>
-                            <Col>
-                                <DatePicker
-                                    className="form-control"
-                                    placeholderText="Hasta"
-                                    selected={filtros.hasta}
-                                    onChange={(date) => setFiltros({ ...filtros, hasta: date })}
-                                    showTimeSelect
-                                    dateFormat="Pp"
-                                />
-                            </Col>
-                            <Col>
-                                <Form.Select value={filtros.pagado} onChange={(e) => setFiltros({ ...filtros, pagado: e.target.value })}>
-                                    <option value="">Todos (pagado/no pagado)</option>
-                                    <option value="true">SI (Pagado)</option>
-                                    <option value="false">NO (No pagado)</option>
-                                </Form.Select>
-                            </Col>
-                            <Col>
-                                <Form.Control
-                                    type="number"
-                                    placeholder="ID Pedido"
-                                    value={filtros.idPedido || ""}
-                                    onChange={(e) => setFiltros({ ...filtros, idPedido: e.target.value ? parseInt(e.target.value) : undefined })}
-                                />
-                            </Col>
-                            <Col>
-                                <Button variant="outline-secondary" onClick={handleVerTodos}>Ver Todos</Button>
+                            <Col xs={12} md={4} lg={3} className="d-flex flex-column align-items-end justify-content-center">
+                                <Button
+                                    variant="outline-secondary"
+                                    onClick={handleVerTodos}
+                                    style={{ minWidth: 140, marginBottom: 6, height: 38 }}
+                                >
+                                    Limpiar
+                                </Button>
+                                <Button
+                                    variant={sortDesc ? "outline-primary" : "outline-dark"}
+                                    onClick={() => setSortDesc((prev) => !prev)}
+                                    title="Alternar orden de fecha"
+                                    style={{ minWidth: 140, height: 38 }}
+                                >
+                                    {sortDesc ? "⬇ Más nuevos" : "⬆ Más viejos"}
+                                </Button>
                             </Col>
                         </Row>
                     </Form>
+                </Card.Body>
+            </Card>
 
+            {/* Caja de pedidos */}
+            <Card className="mb-4 shadow-sm">
+                <Card.Header>
+                    <div className="d-flex justify-content-between align-items-center">
+                        <Card.Title className="mb-0">Pedidos</Card.Title>
+                    </div>
+                </Card.Header>
+                <Card.Body>
                     {loading ? (
                         <div className="text-center">
                             <Spinner animation="border" />
@@ -620,6 +769,13 @@ const GrillaPedidos: React.FC<Props> = ({ cliente }) => {
                 onConfirm={handleConfirmarDelivery}
                 pedido={pedidoEnProceso!}
                 empleadosDelivery={empleadosDelivery}
+            />
+            <ModalMensaje
+                show={modalMensaje.show}
+                onHide={() => setModalMensaje({ ...modalMensaje, show: false })}
+                mensaje={modalMensaje.mensaje}
+                titulo={modalMensaje.titulo}
+                variante={modalMensaje.variante}
             />
         </>
     );

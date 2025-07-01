@@ -19,15 +19,23 @@ const LoginUsuario = ({ onRegisterClick , onClose}: Props) => {
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [message, setMessage] = useState<string | null>(null);
-    const [loading, setLoading] = useState(false)
+    const [loading, setLoading] = useState(false);
+    const [offlineMode, setOfflineMode] = useState(false);
 
-    const { login } = useAuth();
+    const { login, loginOffline,  setIsOfflineMode } = useAuth();
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (step !== 1) return;
 
-        if (!email || !password) {
-            setError("Por favor completá todos los campos.");
+        if (!email) {
+            setError("Por favor ingresá tu email.");
+            return;
+        }
+
+        // En modo offline no necesitamos contraseña
+        if (!offlineMode && !password) {
+            setError("Por favor ingresá tu contraseña.");
             return;
         }
 
@@ -35,25 +43,45 @@ const LoginUsuario = ({ onRegisterClick , onClose}: Props) => {
         setError(null);
 
         try {
-            await login(email, password);
-            setMessage("¡Inicio de sesión exitoso!");
+            // Establecer el modo offline en el contexto
+            setIsOfflineMode(offlineMode);
+
+            if (offlineMode) {
+                // Login offline - solo con email
+                await loginOffline(email);
+                setMessage("¡Inicio de sesión offline exitoso!");
+            } else {
+                // Login normal con Firebase
+                await login(email, password);
+                setMessage("¡Inicio de sesión exitoso!");
+            }
+
             setTimeout(() => {
                 if (onClose) onClose();
             }, 1000);
         } catch (err: any) {
             console.error("Error en login:", err);
-            if (err.message === "inactivo") {
-                setError("Tu cuenta está inactiva. Si creés que esto es un error, escribinos a buensabor@gmail.com");
+
+            if (offlineMode) {
+                setError("Usuario no encontrado en la base de datos local. Verificá el email.");
             } else {
-                setError("Credenciales incorrectas. Verificá tu email y contraseña.");
+                if (err.message === "inactivo") {
+                    setError("Tu cuenta está inactiva. Si creés que esto es un error, escribinos a buensabor@gmail.com");
+                } else {
+                    setError("Credenciales incorrectas. Verificá tu email y contraseña.");
+                }
             }
-        }
-        finally {
+        } finally {
             setLoading(false);
         }
     };
 
     const handleGoogleLogin = async () => {
+        if (offlineMode) {
+            setError("El login con Google no está disponible en modo offline.");
+            return;
+        }
+
         setLoading(true);
         setError(null);
 
@@ -62,9 +90,6 @@ const LoginUsuario = ({ onRegisterClick , onClose}: Props) => {
             const user = result.user;
 
             console.log("Usuario Google logueado:", user);
-
-            // El AuthContext se encargará de detectar si necesita registro o no
-            // Si necesita registro, el App.tsx mostrará el modal automáticamente
 
             if (onClose) onClose();
         } catch (err: any) {
@@ -96,41 +121,68 @@ const LoginUsuario = ({ onRegisterClick , onClose}: Props) => {
         }
     };
 
+    const handleOfflineModeChange = (checked: boolean) => {
+        setOfflineMode(checked);
+        setError(null);
+        setMessage(null);
+    };
+
     return (
         <Form onSubmit={handleSubmit}>
             {step === 1 && (
                 <>
-                <Form.Group className="mb-3">
-                    <Form.Label>Email</Form.Label>
-                    <Form.Control
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        disabled={loading}
-                        required
-                    />
-                </Form.Group>
-
-                    <Form.Group controlId="password" className="mb-3">
-                        <InputGroup>
-                            <Form.Control
-                                type={showPassword ? "text" : "password"}
-                                placeholder="Contraseña"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                required
-                                disabled={loading}
-                            />
-                            <Button
-                                variant="outline-secondary"
-                                onClick={() => setShowPassword(!showPassword)}
-                                tabIndex={-1}
-                                disabled={loading}
-                            >
-                                {showPassword ? <EyeSlash /> : <Eye />}
-                            </Button>
-                        </InputGroup>
+                    {/* Checkbox para modo offline para pruebas */}
+                    <Form.Group className="mb-3">
+                        <Form.Check
+                            type="checkbox"
+                            id="offline-mode"
+                            label="Modo Offline (Sin conexión a internet- Pruebas)"
+                            checked={offlineMode}
+                            onChange={(e) => handleOfflineModeChange(e.target.checked)}
+                            disabled={loading}
+                        />
+                        {offlineMode && (
+                            <Form.Text className="text-muted">
+                                En modo offline solo necesitás tu email. No se requiere contraseña.
+                            </Form.Text>
+                        )}
                     </Form.Group>
+
+                    <Form.Group className="mb-3">
+                        <Form.Label>Email</Form.Label>
+                        <Form.Control
+                            type="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            disabled={loading}
+                            required
+                        />
+                    </Form.Group>
+
+                    {/* Solo mostrar campo de contraseña si no está en modo offline */}
+                    {!offlineMode && (
+                        <Form.Group controlId="password" className="mb-3">
+                            <Form.Label>Contraseña</Form.Label>
+                            <InputGroup>
+                                <Form.Control
+                                    type={showPassword ? "text" : "password"}
+                                    placeholder="Contraseña"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    required
+                                    disabled={loading}
+                                />
+                                <Button
+                                    variant="outline-secondary"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    tabIndex={-1}
+                                    disabled={loading}
+                                >
+                                    {showPassword ? <EyeSlash /> : <Eye />}
+                                </Button>
+                            </InputGroup>
+                        </Form.Group>
+                    )}
 
                     {error && <div className="alert alert-danger">{error}</div>}
                     {message && <div className="alert alert-success">{message}</div>}
@@ -141,33 +193,38 @@ const LoginUsuario = ({ onRegisterClick , onClose}: Props) => {
                         className="w-100 mb-2"
                         disabled={loading}
                     >
-                        {loading ? "Iniciando sesión..." : "Iniciar Sesión"}
+                        {loading ?
+                            (offlineMode ? "Conectando offline..." : "Iniciando sesión...") :
+                            (offlineMode ? "Entrar Offline" : "Iniciar Sesión")
+                        }
                     </Button>
 
+                    {/* Solo mostrar Google login si no está en modo offline */}
+                    {!offlineMode && (
+                        <button
+                            type="button"
+                            className="btn btn-outline-dark w-100 mb-2"
+                            onClick={handleGoogleLogin}
+                            disabled={loading}
+                        >
+                            <img
+                                src="https://developers.google.com/identity/images/g-logo.png"
+                                alt="Google"
+                                width="20"
+                                className="me-2"
+                            />
+                            {loading ? "Conectando..." : "Continuar con Google"}
+                        </button>
+                    )}
 
-                    <button
-                        type="button"
-                        className="btn btn-outline-dark w-100 mb-2"
-                        onClick={handleGoogleLogin}
-                        disabled={loading}
-                    >
-                        <img
-                            src="https://developers.google.com/identity/images/g-logo.png"
-                            alt="Google"
-                            width="20"
-                            className="me-2"
-                        />
-                        {loading ? "Conectando..." : "Continuar con Google"}
-                    </button>
-
-
-                    {error && <div className="text-danger text-center mt-2">{error}</div>}
-                    {message && <div className="text-success text-center mt-2">{message}</div>}
-                    <div className="text-center mt-2">
-                        <Button variant="link" size="sm" onClick={() => setStep(2)}>
-                            ¿Olvidaste tu contraseña?
-                        </Button>
-                    </div>
+                    {/* Solo mostrar recuperar contraseña si no está en modo offline */}
+                    {!offlineMode && (
+                        <div className="text-center mt-2">
+                            <Button variant="link" size="sm" onClick={() => setStep(2)}>
+                                ¿Olvidaste tu contraseña?
+                            </Button>
+                        </div>
+                    )}
 
                     <hr />
 

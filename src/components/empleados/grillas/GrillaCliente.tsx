@@ -7,15 +7,14 @@ import {
     obtenerClientePorId
 } from "../../../services/ClienteService.ts";
 import { ReusableTable } from "../../Tabla";
-import BotonVer from "../../layout/BotonVer.tsx";
-import BotonEliminar from "../../layout/BotonEliminar.tsx";
-import BotonAlta from "../../layout/BotonAlta.tsx";
-import googleLogo from "../../../assets/google_logo.png";
+import BotonVer from "../../layout/botones/BotonVer.tsx";
+import BotonEliminar from "../../layout/botones/BotonEliminar.tsx";
+import BotonAlta from "../../layout/botones/BotonAlta.tsx";
 import { Modal, Form, Button } from "react-bootstrap";
-import { darDeAltaUsuario, eliminarUsuario } from "../../../services/UsuarioService.ts";
 import PedidoClienteModal from "../modales/PedidoClienteModal.tsx";
 import { ChevronLeft, ChevronRight } from "react-bootstrap-icons";
 import pedidoService from "../../../services/PedidoService";
+
 
 const GrillaCliente = () => {
     const [clientes, setClientes] = useState<Cliente[]>([]);
@@ -39,9 +38,21 @@ const GrillaCliente = () => {
     const [showModal, setShowModal] = useState(false);
     const [mostrarDomicilios, setMostrarDomicilios] = useState(false);
 
+    // Estados para modal de confirmación y resultado - NUEVOS
+    const [showModalConfirmacion, setShowModalConfirmacion] = useState(false);
+    const [showModalResultado, setShowModalResultado] = useState(false);
+    const [accionPendiente, setAccionPendiente] = useState<{
+        tipo: 'eliminar' | 'alta';
+        clienteId: number;
+        clienteNombre: string;
+    } | null>(null);
+    const [mensajeResultado, setMensajeResultado] = useState("");
+    const [tipoResultado, setTipoResultado] = useState<'success' | 'error'>('success');
+    const [procesando, setProcesando] = useState(false);
+
     const cargarPedidosPorCliente = async (clientes: Cliente[]) => {
-        // Solo cargar si no estamos ordenando por pedidos (ya que el backend ya los ordena)
-        if (tipoOrden === "pedidos") return;
+        // REMOVIDO: if (tipoOrden === "pedidos") return;
+        // Siempre cargar los contadores de pedidos independientemente del tipo de orden
 
         const nuevosContadores: { [clienteId: number]: number } = {};
         await Promise.all(
@@ -50,6 +61,7 @@ const GrillaCliente = () => {
                     const count = await pedidoService.getPedidosClienteCount(cliente.id!);
                     nuevosContadores[cliente.id!] = count;
                 } catch (error) {
+                    console.error(`Error al cargar pedidos para cliente ${cliente.id}:`, error);
                     nuevosContadores[cliente.id!] = 0;
                 }
             })
@@ -107,13 +119,16 @@ const GrillaCliente = () => {
             );
 
             setClientes(result.content);
+
+            // CAMBIO IMPORTANTE: Esperar a que se carguen los pedidos antes de quitar el loading
             await cargarPedidosPorCliente(result.content);
+
             setTotalPages(result.totalPages);
         } catch (error) {
             console.error("Error al cargar clientes:", error);
-            alert("Error al cargar clientes");
+            mostrarResultado("Error al cargar clientes", 'error');
         } finally {
-            setLoading(false);
+            setLoading(false); // Solo se quita el loading cuando TODO esté cargado
         }
     };
 
@@ -127,28 +142,61 @@ const GrillaCliente = () => {
         cargarClientes();
     }, [page, search, estado, ordenAsc, tipoOrden]);
 
-    const handleEliminar = async (id: number, idUsuario: number) => {
-        if (!window.confirm("¿Seguro que desea eliminar este cliente?")) return;
+    // Nuevas funciones para manejo de modales - NUEVAS
+    const mostrarConfirmacion = (tipo: 'eliminar' | 'alta', clienteId: number, clienteNombre: string) => {
+        setAccionPendiente({
+            tipo,
+            clienteId,
+            clienteNombre
+        });
+        setShowModalConfirmacion(true);
+    };
+
+    const mostrarResultado = (mensaje: string, tipo: 'success' | 'error') => {
+        setMensajeResultado(mensaje);
+        setTipoResultado(tipo);
+        setShowModalResultado(true);
+    };
+
+    const ejecutarAccion = async () => {
+        if (!accionPendiente) return;
+
+        setProcesando(true);
+        setShowModalConfirmacion(false);
+
         try {
-            await eliminarCliente(id);
-            await eliminarUsuario(idUsuario);
+            if (accionPendiente.tipo === 'eliminar') {
+                await eliminarCliente(accionPendiente.clienteId);
+                mostrarResultado("Cliente eliminado correctamente", 'success');
+            } else {
+                await darDeAltaCliente(accionPendiente.clienteId);
+                mostrarResultado("Cliente dado de alta correctamente", 'success');
+            }
+            
             await cargarClientes();
-            alert("Cliente eliminado correctamente");
         } catch (error) {
-            alert("Error al eliminar el cliente");
+            const mensaje = accionPendiente.tipo === 'eliminar' 
+                ? "Error al eliminar el cliente" 
+                : "Error al dar de alta el cliente";
+            mostrarResultado(mensaje, 'error');
+        } finally {
+            setProcesando(false);
+            setAccionPendiente(null);
         }
     };
 
-    const handleAlta = async (id: number, idUsuario: number) => {
-        if (!window.confirm("¿Desea dar de alta este cliente?")) return;
-        try {
-            await darDeAltaCliente(id);
-            await darDeAltaUsuario(idUsuario);
-            await cargarClientes();
-            alert("Cliente dado de alta correctamente");
-        } catch (error) {
-            alert("Error al dar de alta el cliente");
-        }
+    const cancelarAccion = () => {
+        setShowModalConfirmacion(false);
+        setAccionPendiente(null);
+    };
+
+    // ACTUALIZADO: Reemplazar las funciones handleEliminar y handleAlta
+    const handleEliminar = (cliente: Cliente) => {
+        mostrarConfirmacion('eliminar', cliente.id!, `${cliente.nombre} ${cliente.apellido}`);
+    };
+
+    const handleAlta = (cliente: Cliente) => {
+        mostrarConfirmacion('alta', cliente.id!, `${cliente.nombre} ${cliente.apellido}`);
     };
 
     const handleVer = async (cliente: Cliente) => {
@@ -157,7 +205,7 @@ const GrillaCliente = () => {
             setClienteSeleccionado(data);
             setShowModal(true);
         } catch (err) {
-            alert("Error al obtener los datos del cliente");
+            mostrarResultado("Error al obtener los datos del cliente", 'error'); // ACTUALIZADO
         }
     };
 
@@ -209,11 +257,8 @@ const GrillaCliente = () => {
             key: "pedidos",
             label: "Pedidos",
             render: (_: any, row: Cliente) => {
-                // Si estamos ordenando por pedidos, no necesitamos cargar individualmente
-                if (tipoOrden === "pedidos") {
-                    return pedidosPorCliente[row.id!] !== undefined ? pedidosPorCliente[row.id!] : "...";
-                }
-                return pedidosPorCliente[row.id!] !== undefined ? pedidosPorCliente[row.id!] : "Cargando...";
+                const count = pedidosPorCliente[row.id!];
+                return count !== undefined ? count : "Cargando...";
             },
         },
         {
@@ -228,9 +273,9 @@ const GrillaCliente = () => {
                 <div className="d-flex justify-content-center gap-2">
                     <BotonVer onClick={() => handleVer(row)} />
                     {!row.eliminado ? (
-                        <BotonEliminar onClick={() => handleEliminar(row.id!, row.usuario.id)} />
+                        <BotonEliminar onClick={() => handleEliminar(row)} /> // ACTUALIZADO
                     ) : (
-                        <BotonAlta onClick={() => handleAlta(row.id!, row.usuario.id)} />
+                        <BotonAlta onClick={() => handleAlta(row)} /> // ACTUALIZADO
                     )}
                 </div>
             ),
@@ -334,22 +379,19 @@ const GrillaCliente = () => {
                     {clienteSeleccionado && (
                         <div className="container">
                             <div className="d-flex flex-column align-items-center mb-3">
-                                <img
-                                    src={
-                                        clienteSeleccionado.usuario.providerId === "google.com"
-                                            ? googleLogo
-                                            : clienteSeleccionado.usuario.photoUrl
-                                    }
-                                    alt="Foto de perfil"
-                                    className="rounded-circle"
-                                    style={{ width: 100, height: 100, objectFit: "cover" }}
-                                />
+                                {clienteSeleccionado.usuario.photoUrl ? (
+                                    <img
+                                        src={clienteSeleccionado.usuario.photoUrl}
+                                        alt="Foto de perfil"
+                                        className="rounded-circle"
+                                        style={{ width: 100, height: 100, objectFit: "cover" }}
+                                    />
+                                ) : ("Sin imagen")}
                             </div>
 
                             <div className="mb-3">
                                 <p><b>Nombre:</b> {clienteSeleccionado.nombre}</p>
                                 <p><b>Apellido:</b> {clienteSeleccionado.apellido}</p>
-                                <p><b>DNI:</b> {clienteSeleccionado.usuario.dni}</p>
                                 <p><b>Teléfono:</b> {clienteSeleccionado.telefono}</p>
                                 <p><b>Email:</b> {clienteSeleccionado.usuario.email}</p>
                                 <p><b>Proveedor:</b> {clienteSeleccionado.usuario.providerId === "google.com" ? "Google" : "Contraseña"}</p>
@@ -400,6 +442,90 @@ const GrillaCliente = () => {
                     cliente={clientePedidos}
                 />
             )}
+
+            {/* Modal de Confirmación - NUEVO */}
+            <Modal 
+                show={showModalConfirmacion} 
+                onHide={cancelarAccion} 
+                centered
+                backdrop="static"
+            >
+                <Modal.Header closeButton>
+                    <Modal.Title>
+                        {accionPendiente?.tipo === 'eliminar' ? 'Confirmar Eliminación' : 'Confirmar Alta'}
+                    </Modal.Title>
+                </Modal.Header>
+                <Modal.Body>
+                    <div className="text-center">
+                        <div className={`mb-3 ${accionPendiente?.tipo === 'eliminar' ? 'text-danger' : 'text-success'}`}>
+                            <i className={`bi ${accionPendiente?.tipo === 'eliminar' ? 'bi-exclamation-triangle' : 'bi-check-circle'} display-1`}></i>
+                        </div>
+                        <h5>
+                            {accionPendiente?.tipo === 'eliminar' 
+                                ? '¿Está seguro que desea eliminar este cliente?' 
+                                : '¿Está seguro que desea dar de alta este cliente?'
+                            }
+                        </h5>
+                        <p className="text-muted">
+                            <strong>{accionPendiente?.clienteNombre }</strong>
+                        </p>
+                        <p className="small text-muted">
+                            {accionPendiente?.tipo === 'eliminar' 
+                                ? 'Esta acción cambiará el estado del cliente a inactivo.' 
+                                : 'Esta acción cambiará el estado del cliente a activo.'
+                            }
+                        </p>
+                    </div>
+                </Modal.Body>
+                <Modal.Footer>
+                    <Button variant="secondary" onClick={cancelarAccion} disabled={procesando}>
+                        Cancelar
+                    </Button>
+                    <Button 
+                        variant={accionPendiente?.tipo === 'eliminar' ? 'danger' : 'success'} 
+                        onClick={ejecutarAccion}
+                        disabled={procesando}
+                    >
+                        {procesando ? (
+                            <>
+                                <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                                Procesando...
+                            </>
+                        ) : (
+                            accionPendiente?.tipo === 'eliminar' ? 'Eliminar' : 'Dar de Alta'
+                        )}
+                    </Button>
+                </Modal.Footer>
+            </Modal>
+
+            {/* Modal de Resultado - NUEVO */}
+            <Modal 
+                show={showModalResultado} 
+                onHide={() => setShowModalResultado(false)} 
+                centered
+            >
+                <Modal.Header closeButton>
+                    <Modal.Title>
+                        {tipoResultado === 'success' ? 'Operación Exitosa' : 'Error'}
+                    </Modal.Title>
+                </Modal.Header>
+                <Modal.Body>
+                    <div className="text-center">
+                        <div className={`mb-3 ${tipoResultado === 'success' ? 'text-success' : 'text-danger'}`}>
+                            <i className={`bi ${tipoResultado === 'success' ? 'bi-check-circle-fill' : 'bi-x-circle-fill'} display-1`}></i>
+                        </div>
+                        <h5>{mensajeResultado}</h5>
+                    </div>
+                </Modal.Body>
+                <Modal.Footer>
+                    <Button 
+                        variant={tipoResultado === 'success' ? 'success' : 'danger'} 
+                        onClick={() => setShowModalResultado(false)}
+                    >
+                        Aceptar
+                    </Button>
+                </Modal.Footer>
+            </Modal>
         </div>
     );
 };
