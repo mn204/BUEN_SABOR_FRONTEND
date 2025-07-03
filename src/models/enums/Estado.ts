@@ -1,0 +1,10 @@
+enum Estado {
+    CANCELADO = "CANCELADO",
+    PENDIENTE = "PENDIENTE",
+    PREPARACION = "PREPARACION",
+    LISTO = "LISTO",
+    EN_DELIVERY = "EN_DELIVERY",
+    ENTREGADO = "ENTREGADO"
+}
+
+export default Estado;
